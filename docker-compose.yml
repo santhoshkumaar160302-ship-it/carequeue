@@ -1,0 +1,62 @@
+# Full stack: API + background worker + PostgreSQL + Redis + RabbitMQ.
+#   docker compose up --build      then open http://localhost:8000
+services:
+  api:
+    build: .
+    ports: ["8000:8000"]
+    env_file:
+      - path: .env
+        required: false
+    environment: &env
+      DATABASE_URL: postgresql://carequeue:carequeue@postgres:5432/carequeue
+      REDIS_URL: redis://redis:6379/0
+      RABBITMQ_URL: amqp://guest:guest@rabbitmq:5672/%2F
+      CQ_BACKGROUND_WORKER: "0"   # the worker service below does the background work
+    depends_on: &deps
+      postgres: { condition: service_healthy }
+      redis: { condition: service_healthy }
+      rabbitmq: { condition: service_healthy }
+
+  worker:
+    build: .
+    command: ["python", "-m", "carequeue.worker"]
+    env_file:
+      - path: .env
+        required: false
+    environment:
+      <<: *env
+      CQ_SEED_DEMO: "0"
+    depends_on:
+      <<: *deps
+      api: { condition: service_healthy }
+    restart: unless-stopped
+
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: carequeue
+      POSTGRES_PASSWORD: carequeue
+      POSTGRES_DB: carequeue
+    volumes: [pgdata:/var/lib/postgresql/data]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U carequeue"]
+      interval: 3s
+      retries: 20
+
+  redis:
+    image: redis:7-alpine
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 3s
+      retries: 20
+
+  rabbitmq:
+    image: rabbitmq:3.13-management-alpine
+    ports: ["15672:15672"]   # management UI: http://localhost:15672 (guest / guest)
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"]
+      interval: 5s
+      retries: 30
+
+volumes:
+  pgdata:

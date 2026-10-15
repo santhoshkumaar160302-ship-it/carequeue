@@ -1,0 +1,53 @@
+{
+  "args": {
+    "weeks": 12,
+    "load": 1.2,
+    "cancel_rate": 0.15,
+    "waitlist_rate": 0.6,
+    "same_day_share": 0.15,
+    "seed": 42,
+    "out": "/tmp/claude-0/-home-claude/8573973e-45f8-5925-ab75-c74112bc8411/scratchpad/sim12.json"
+  },
+  "results": [
+    {
+      "policy": "baseline",
+      "requests": 4589,
+      "booked": 4589,
+      "unserved": 0,
+      "cancellations": 697,
+      "offers": 0,
+      "accepted": 0,
+      "declined": 0,
+      "expired": 0,
+      "events": 5286,
+      "slots_measured": 2560,
+      "visits": 2449,
+      "utilization": 0.956640625,
+      "avg_wait_days": 7.8172037339503655,
+      "median_wait_days": 7.909027777777778,
+      "avg_delay_days": 2.60024499795835,
+      "seconds": 90.1
+    },
+    {
+      "policy": "waitlist",
+      "requests": 4589,
+      "booked": 4589,
+      "unserved": 0,
+      "cancellations": 626,
+      "offers": 1789,
+      "accepted": 1285,
+      "declined": 257,
+      "expired": 246,
+      "events": 7075,
+      "slots_measured": 2560,
+      "visits": 2549,
+      "utilization": 0.995703125,
+      "avg_wait_days": 7.204159583278845,
+      "median_wait_days": 7.085416666666666,
+      "avg_delay_days": 2.0094154570419773,
+      "seconds": 186.2
+    }
+  ],
+  "utilization_gain_relative": 0.04083299305839118,
+  "wait_reduction_relative": 0.07842243486747694
+}
