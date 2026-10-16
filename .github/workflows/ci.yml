@@ -119,9 +119,19 @@ jobs:
       - name: Smoke test the UI and API
         run: |
           curl -fsS http://localhost:8000/ | grep -q '<div id="root">'
-          curl -fsS http://localhost:8000/api/metrics
-          curl -fsS -X POST http://localhost:8000/api/assistant -H 'content-type: application/json' \
+          curl -fsS http://localhost:8000/api/providers
+          # Signed out, the portals must refuse.
+          test "$(curl -s -o /dev/null -w '%{http_code}' http://localhost:8000/api/me/overview)" = 401
+          # Sign in as the demo patient and the demo doctor (the session lives in a cookie).
+          curl -fsS -c patient.txt -X POST http://localhost:8000/api/auth/demo -H 'content-type: application/json' \
+            -d '{"role":"patient"}'
+          curl -fsS -b patient.txt http://localhost:8000/api/me/overview
+          curl -fsS -b patient.txt -X POST http://localhost:8000/api/me/assistant -H 'content-type: application/json' \
             -d '{"text":"skin doctor next week"}'
+          curl -fsS -c doctor.txt -X POST http://localhost:8000/api/auth/demo -H 'content-type: application/json' \
+            -d '{"role":"doctor"}'
+          curl -fsS -b doctor.txt http://localhost:8000/api/doctor/today
+          curl -fsS -b doctor.txt http://localhost:8000/api/doctor/metrics
       - name: Make sure no secrets were baked into the image
         run: |
           if docker run --rm --entrypoint sh carequeue:ci -c 'ls -a /app' | grep -qx '.env'; then
