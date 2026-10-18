@@ -9,7 +9,7 @@ COPY frontend/ ./
 RUN npm run build -- --outDir /ui/dist
 
 # 2) Python runtime that serves the API and the built app.
-FROM python:3.12-slim
+FROM python:3.14-slim
 ENV PYTHONDONTWRITEBYTECODE=1 PYTHONUNBUFFERED=1 PORT=8000
 WORKDIR /app
 COPY requirements.txt .
