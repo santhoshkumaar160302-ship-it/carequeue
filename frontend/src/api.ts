@@ -37,12 +37,18 @@ export type Today = {
   next: (Visit & { now: boolean; last_visit: Visit | null }) | null;
   counts: { booked: number; done: number; to_close: number; open_today: number; waitlist: number };
 };
+/** "mine": this doctor has seen them before. "new": booked or waiting, but not seen by this doctor yet. */
+export type PatientGroup = "mine" | "new";
 export type DoctorPatient = {
-  id: number; name: string; phone: string; visits: number;
+  id: number; name: string; phone: string; visits: number; group: PatientGroup; waiting: boolean;
   last_visit: { start: string; label: string } | null;
-  next_visit: { start: string; label: string; appointment_id: number } | null;
+  next_visit: { start: string; label: string; appointment_id: number; offer: boolean } | null;
 };
-export type PatientRecord = { id: number; name: string; phone: string; upcoming: Visit[]; history: Visit[] };
+export type RecordWaiting = { id: number; status: "waiting" | "offered"; earliest: string; latest: string; time_of_day: string; priority: number };
+export type PatientRecord = {
+  id: number; name: string; phone: string; group: PatientGroup; visits: number; waiting: RecordWaiting[];
+  upcoming: Visit[]; history: Visit[];
+};
 export type HoursDay = { weekday: number; name: string; working: boolean; start: string | null; end: string | null };
 export type TimeOff = { id: number; start: string; end: string; reason: string; label: string };
 export type Affected = { appointment_id: number; patient_id: number; patient: string; start: string; label: string };
@@ -142,7 +148,8 @@ export const api = {
     previewTimeOff: (data: TimeOffInput) => post<Preview>("/api/doctor/time-off/preview", data),
     addTimeOff: (data: TimeOffInput) => post<ChangeResult>("/api/doctor/time-off", data),
     removeTimeOff: (id: number) => send<ChangeResult>("DELETE", `/api/doctor/time-off/${id}`),
-    patients: (q = "") => call<DoctorPatient[]>(`/api/doctor/patients?q=${encodeURIComponent(q)}`),
+    patients: (q = "", group: "all" | PatientGroup = "all") =>
+      call<DoctorPatient[]>(`/api/doctor/patients?q=${encodeURIComponent(q)}&group=${group}`),
     patient: (id: number) => call<PatientRecord>(`/api/doctor/patients/${id}`),
     activity: () => call<ActivityEvent[]>("/api/doctor/activity"),
     waitlist: () => call<WaitlistRow[]>("/api/doctor/waitlist"),
@@ -155,12 +162,14 @@ export type TimeOffInput = { start: string; end: string; reason: string };
 export const toISODate = (d: Date) =>
   `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
 export const parseLocal = (iso: string) => new Date(iso.length === 10 ? `${iso}T00:00:00` : iso);
+/** Dates and times are always shown US-style with a 12-hour clock ("2:30 PM"), whatever the browser's region. */
+export const LOCALE = "en-US";
 export const timeLabel = (iso: string) =>
-  parseLocal(iso).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
+  parseLocal(iso).toLocaleTimeString(LOCALE, { hour: "numeric", minute: "2-digit", hour12: true });
 export const dayLabel = (iso: string) =>
-  parseLocal(iso).toLocaleDateString([], { weekday: "short", month: "short", day: "numeric" });
+  parseLocal(iso).toLocaleDateString(LOCALE, { weekday: "short", month: "short", day: "numeric" });
 export const longDay = (iso: string) =>
-  parseLocal(iso).toLocaleDateString([], { weekday: "long", month: "long", day: "numeric" });
+  parseLocal(iso).toLocaleDateString(LOCALE, { weekday: "long", month: "long", day: "numeric" });
 export const pct = (x: number) => `${Math.round(x * 1000) / 10}%`;
 
 export function mondayOf(d: Date): string {

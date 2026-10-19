@@ -9,7 +9,7 @@ from datetime import datetime, time, timedelta
 
 from sqlalchemy import func, select
 
-from .clinic import Clinic, Conflict, NotFound, fmt_when
+from .clinic import Clinic, ClinicError, Conflict, NotFound, fmt_when
 from .models import ACTIVE_STATUSES, SHOWN_STATUSES, Appointment, Notification, Patient, Provider, Slot, WaitlistEntry
 
 DONE_STATUSES = ("completed", "no_show")
@@ -120,30 +120,52 @@ class Visits:
             s.commit()
             return _visit(appt, appt.slot)
 
-    def doctor_patients(self, provider_id: int, query: str = "") -> list[dict]:
-        """Everyone this doctor has seen or will see, with their last and next visit."""
+    def doctor_patients(self, provider_id: int, query: str = "", group: str = "all") -> list[dict]:
+        """Everyone this doctor has seen or may see, with their last and next visit.
+
+        group="mine": patients this doctor has already seen (at least one completed visit).
+        group="new":  patients who haven't been seen by this doctor yet, but are booked
+                      with them or waiting for them on the waitlist.
+        """
+        if group not in ("all", "mine", "new"):
+            raise ClinicError("group must be all, mine or new")
         now = self.clock.now()
+        needle = query.strip().lower()
+        people: dict[int, dict] = {}
+
+        def row_for(p: Patient) -> dict:
+            return people.setdefault(p.id, {"id": p.id, "name": p.name, "phone": p.phone, "visits": 0,
+                                            "last_visit": None, "next_visit": None, "waiting": False})
         with self.Session() as s:
             q = (select(Appointment, Slot, Patient).join(Slot, Appointment.slot_id == Slot.id)
                  .join(Patient, Appointment.patient_id == Patient.id)
-                 .where(Slot.provider_id == provider_id, Appointment.status.in_(("booked", *DONE_STATUSES)))
+                 .where(Slot.provider_id == provider_id,
+                        Appointment.status.in_(("booked", "held", *DONE_STATUSES)))
                  .order_by(Slot.start))
-            if query.strip():
-                q = q.where(func.lower(Patient.name).contains(query.strip().lower()))
-            people: dict[int, dict] = {}
+            w = (select(WaitlistEntry, Patient).join(Patient, WaitlistEntry.patient_id == Patient.id)
+                 .where(WaitlistEntry.provider_id == provider_id,
+                        WaitlistEntry.status.in_(("waiting", "offered"))))
+            if needle:
+                q = q.where(func.lower(Patient.name).contains(needle))
+                w = w.where(func.lower(Patient.name).contains(needle))
             for a, sl, p in s.execute(q):
-                row = people.setdefault(p.id, {"id": p.id, "name": p.name, "phone": p.phone, "visits": 0,
-                                               "last_visit": None, "next_visit": None})
+                row = row_for(p)
                 if a.status == "completed":
                     row["visits"] += 1
                     row["last_visit"] = {"start": sl.start.isoformat(), "label": fmt_when(sl.start)}
-                elif a.status == "booked" and sl.start > now and row["next_visit"] is None:
+                elif a.status in ACTIVE_STATUSES and sl.start > now and row["next_visit"] is None:
                     row["next_visit"] = {"start": sl.start.isoformat(), "label": fmt_when(sl.start),
-                                         "appointment_id": a.id}
+                                         "appointment_id": a.id, "offer": a.status == "held"}
+            for _entry, p in s.execute(w):
+                row_for(p)["waiting"] = True
+        for row in people.values():
+            row["group"] = "mine" if row["visits"] else "new"
+        # A new patient with no booking and no wait is someone whose only visit was missed or not
+        # yet written up; they still belong here, so the doctor can find them.
+        rows = [r for r in people.values() if group == "all" or r["group"] == group]
         # Patients with something coming up first (soonest first), then everyone else by name.
-        return sorted(people.values(), key=lambda r: (r["next_visit"] is None,
-                                                       r["next_visit"]["start"] if r["next_visit"] else "",
-                                                       r["name"]))
+        return sorted(rows, key=lambda r: (r["next_visit"] is None,
+                                           r["next_visit"]["start"] if r["next_visit"] else "", r["name"]))
 
     def doctor_patient(self, provider_id: int, patient_id: int) -> dict:
         """One patient's visits with this doctor only. Other doctors' notes stay private."""
@@ -153,11 +175,19 @@ class Visits:
                              .where(Slot.provider_id == provider_id, Appointment.patient_id == patient_id,
                                     Appointment.status.in_(("booked", "held", "cancelled", *DONE_STATUSES)))
                              .order_by(Slot.start.desc())).all()
-            if patient is None or not rows:
+            waits = s.scalars(select(WaitlistEntry).where(
+                WaitlistEntry.provider_id == provider_id, WaitlistEntry.patient_id == patient_id,
+                WaitlistEntry.status.in_(("waiting", "offered")))).all()
+            if patient is None or not (rows or waits):
                 raise NotFound(f"patient {patient_id} not found")
             visits = [_visit(a, sl) for a, sl in rows]
+            waiting = [{"id": e.id, "status": e.status, "earliest": e.earliest.isoformat(),
+                        "latest": e.latest.isoformat(), "time_of_day": e.time_of_day, "priority": e.priority}
+                       for e in waits]
         now = self.clock.now()
+        seen = sum(1 for v in visits if v["status"] == "completed")
         return {"id": patient.id, "name": patient.name, "phone": patient.phone,
+                "group": "mine" if seen else "new", "visits": seen, "waiting": waiting,
                 "upcoming": [v for v in reversed(visits) if v["status"] in ACTIVE_STATUSES
                              and datetime.fromisoformat(v["start"]) > now],
                 "history": [v for v in visits if v["status"] in DONE_STATUSES

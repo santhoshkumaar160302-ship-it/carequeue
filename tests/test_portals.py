@@ -163,3 +163,27 @@ def test_reschedule_books_the_new_slot_before_releasing_the_old_one(clinic):
     moved = clinic.reschedule(old["id"], slot_at(clinic, 1, datetime(2026, 10, 14, 11, 0)))
     assert moved["replaced_appointment_id"] == old["id"]
     assert appointment(clinic, old["id"]).cancel_reason == "rescheduled"
+
+
+def test_doctor_can_split_patients_into_seen_and_new(clinic, visits, clock):
+    seen = clinic.book(PATIENTS["Noah"], slot_at(clinic, 1, datetime(2026, 10, 12, 9, 0)))
+    clinic.book(PATIENTS["Mia"], slot_at(clinic, 1, THU_10))  # booked, never seen
+    clinic.join_waitlist(PATIENTS["Sofia"], WED, date(2026, 10, 16), provider_id=1)  # only waiting
+    for a in held_for(clinic, PATIENTS["Sofia"]):
+        clinic.decline_hold(a["id"])  # keep her waiting, with no appointment
+    clock.advance(hours=1, minutes=5)
+    visits.close(1, seen["id"], "completed", "Fine.")
+
+    groups = {p["name"]: p["group"] for p in visits.doctor_patients(1)}
+    assert groups == {"Noah": "mine", "Mia": "new", "Sofia": "new"}
+    assert [p["name"] for p in visits.doctor_patients(1, group="mine")] == ["Noah"]
+    new = {p["name"]: p for p in visits.doctor_patients(1, group="new")}
+    assert set(new) == {"Mia", "Sofia"} and new["Sofia"]["waiting"] and new["Mia"]["next_visit"]
+    assert [p["name"] for p in visits.doctor_patients(1, query="so", group="new")] == ["Sofia"]
+
+    record = visits.doctor_patient(1, PATIENTS["Sofia"])  # waiting only, but still the doctor's to see
+    assert record["group"] == "new" and record["waiting"] and record["history"] == []
+    with pytest.raises(NotFound):
+        visits.doctor_patient(2, PATIENTS["Sofia"])  # not on Dr. Brooks's list at all
+    with pytest.raises(ClinicError):
+        visits.doctor_patients(1, group="everyone")

@@ -256,8 +256,13 @@ def _check_range(start: datetime, end: datetime) -> None:
 
 def _range_label(start: datetime, end: datetime) -> str:
     if start.date() == end.date():
-        return f"{start:%a %b} {start.day}, {start:%H:%M}-{end:%H:%M}"
+        return f"{start:%a %b} {start.day}, {_clock(start)} - {_clock(end)}"
     if start.time() == time.min and end.time() == time.min:
         last: date = (end - timedelta(days=1)).date()
         return f"{start:%a %b} {start.day}" + ("" if last == start.date() else f" - {last:%a %b} {last.day}")
-    return f"{start:%a %b} {start.day} {start:%H:%M} - {end:%a %b} {end.day} {end:%H:%M}"
+    return f"{start:%a %b} {start.day} {_clock(start)} - {end:%a %b} {end.day} {_clock(end)}"
+
+
+def _clock(dt: datetime) -> str:
+    """12-hour clock, like the rest of the app: 9:00 AM, 2:30 PM."""
+    return dt.strftime("%I:%M %p").lstrip("0")

@@ -1,7 +1,7 @@
 import { FormEvent, useEffect, useState } from "react";
 import type { Shell } from "./App";
 import {
-  ActivityEvent, Affected, api, CANCEL_LABEL, ChangeResult, dayLabel, DoctorPatient, HoursDay, HoursInput, longDay,
+  LOCALE, ActivityEvent, Affected, api, CANCEL_LABEL, ChangeResult, dayLabel, DoctorPatient, HoursDay, HoursInput, longDay,
   parseLocal, PatientRecord, Preview, Slot, SlotStory, StatusLabelKey, STATUS_LABEL, StoryEvent, timeLabel, TimeOff,
   TimeOffInput, Today, until, Visit, WaitlistRow, Week,
 } from "./api";
@@ -452,26 +452,59 @@ function TimeOffCard({ shell }: { shell: Shell }) {
 }
 
 // ============================================================ patients
+type Filter = "all" | "mine" | "new";
+const FILTERS: { id: Filter; label: string; hint: string }[] = [
+  { id: "all", label: "All", hint: "Everyone you've seen, are booked with, or have waiting" },
+  { id: "mine", label: "My patients", hint: "Patients you've already seen at least once" },
+  { id: "new", label: "New", hint: "Booked with you or on your waitlist, but not seen by you yet" },
+];
+
+function patientLine(p: DoctorPatient): string {
+  if (p.group === "mine") {
+    const seen = `${p.visits} visit${p.visits === 1 ? "" : "s"}, last ${p.last_visit ? dayLabel(p.last_visit.start) : ""}`;
+    return p.next_visit ? `Next ${dayLabel(p.next_visit.start)} · ${seen}` : seen;
+  }
+  if (p.next_visit) return `${p.next_visit.offer ? "Offered" : "First visit"} ${dayLabel(p.next_visit.start)}`;
+  if (p.waiting) return "On your waitlist";
+  return "Not seen yet";
+}
+
 function PatientsView({ shell }: { shell: Shell }) {
   const [q, setQ] = useState("");
   const [query, setQuery] = useState("");
+  const [filter, setFilter] = useState<Filter>(() => {
+    try { return (localStorage.getItem("cq.patientFilter") as Filter) || "all"; } catch { return "all"; }
+  });
   useEffect(() => { const t = setTimeout(() => setQuery(q), 250); return () => clearTimeout(t); }, [q]);
-  const [people] = useData<DoctorPatient[]>(() => api.doctor.patients(query), [query]);
+  useEffect(() => { try { localStorage.setItem("cq.patientFilter", filter); } catch { /* storage unavailable */ } }, [filter]);
+  // One request for everyone; the filter and its counts are worked out here, so switching is instant.
+  const [people] = useData<DoctorPatient[]>(() => api.doctor.patients(query), [query, shell.version]);
   const selected = shell.param ? Number(shell.param) : null;
+  const count = (f: Filter) => (people ?? []).filter((p) => f === "all" || p.group === f).length;
+  const shown = (people ?? []).filter((p) => filter === "all" || p.group === filter);
   return (
     <div className={`patients ${selected ? "has-sel" : ""}`}>
       <section className="card plist">
         <h1>Your patients</h1>
+        <div className="seg small-seg" role="tablist" aria-label="Which patients">
+          {FILTERS.map((f) => (
+            <button key={f.id} role="tab" aria-selected={filter === f.id} className={filter === f.id ? "on" : ""}
+              title={f.hint} onClick={() => setFilter(f.id)}>
+              {f.label} <span className="count">{people ? count(f.id) : ""}</span>
+            </button>
+          ))}
+        </div>
+        <p className="muted small filter-hint">{FILTERS.find((f) => f.id === filter)!.hint}.</p>
         <input className="search" type="search" placeholder="Search by name" value={q} onChange={(e) => setQ(e.target.value)} aria-label="Search patients" />
-        {!people ? <p className="muted">Loading…</p> : people.length === 0 ? <p className="muted">Nobody found.</p> : (
+        {!people ? <p className="muted">Loading…</p> : shown.length === 0 ? (
+          <p className="muted">{q ? "Nobody found." : filter === "new" ? "No new patients right now." : "Nobody here yet."}</p>
+        ) : (
           <ul>
-            {people.slice(0, 200).map((p) => (
+            {shown.slice(0, 200).map((p) => (
               <li key={p.id}>
                 <a href={`#/patients/${p.id}`} className={p.id === selected ? "on" : ""} aria-current={p.id === selected ? "true" : undefined}>
-                  <b>{p.name}</b>
-                  <span className="muted small">
-                    {p.next_visit ? `Next: ${dayLabel(p.next_visit.start)}` : p.last_visit ? `Last seen ${dayLabel(p.last_visit.start)}` : "No visits yet"}
-                  </span>
+                  <span className="pname"><b>{p.name}</b>{p.group === "new" && <span className="tag new">New</span>}</span>
+                  <span className="muted small">{patientLine(p)}</span>
                 </a>
               </li>
             ))}
@@ -489,12 +522,22 @@ function PatientRecordView({ shell, id }: { shell: Shell; id: number }) {
   const [rec, error] = useData<PatientRecord>(() => api.doctor.patient(id), [id, shell.version]);
   if (error) return <Empty>{error}</Empty>;
   if (!rec || rec.id !== id) return <p className="muted">Loading…</p>;
-  const seen = rec.history.filter((v) => v.status === "completed").length;
   return (
     <div>
       <a className="link back" href="#/patients">‹ All patients</a>
-      <h2>{rec.name}</h2>
-      <p className="muted">{rec.phone} · {seen} visit{seen === 1 ? "" : "s"} with you</p>
+      <h2>{rec.name} {rec.group === "new" && <span className="tag new">New patient</span>}</h2>
+      <p className="muted">{rec.phone} · {rec.group === "new" ? "not seen by you yet" : `${rec.visits} visit${rec.visits === 1 ? "" : "s"} with you`}</p>
+      {rec.waiting.length > 0 && (
+        <div className="note-box">
+          {rec.waiting.map((w) => (
+            <p key={w.id}>
+              <b>{w.status === "offered" ? "A time is being offered to them" : "On your waitlist"}</b>{" "}
+              for {dayLabel(w.earliest)} to {dayLabel(w.latest)}{w.time_of_day !== "any" ? `, ${w.time_of_day}s` : ""}
+              {w.priority > 0 ? ". Rebooking first, because a visit with you was cancelled." : "."}
+            </p>
+          ))}
+        </div>
+      )}
       <h3>Coming up</h3>
       {rec.upcoming.length === 0 ? <p className="muted">Nothing booked.</p> : (
         <ul className="visit-list">{rec.upcoming.map((v) => (
@@ -503,7 +546,7 @@ function PatientRecordView({ shell, id }: { shell: Shell; id: number }) {
         ))}</ul>
       )}
       <h3>History with you</h3>
-      {rec.history.length === 0 ? <p className="muted">No past visits.</p> : (
+      {rec.history.length === 0 ? <p className="muted">{rec.group === "new" ? "You haven't seen them before." : "No past visits."}</p> : (
         <ol className="timeline">
           {rec.history.map((v) => <RecordVisit key={v.id} shell={shell} v={v} name={rec.name} />)}
         </ol>
@@ -518,7 +561,7 @@ function RecordVisit({ shell, v, name }: { shell: Shell; v: Visit; name: string 
   const [note, setNote] = useState(v.note ?? "");
   return (
     <li className={v.status}>
-      <div className="when"><b>{parseLocal(v.start).toLocaleDateString([], { month: "short", day: "numeric" })}</b>
+      <div className="when"><b>{parseLocal(v.start).toLocaleDateString(LOCALE, { month: "short", day: "numeric" })}</b>
         <span className="muted small">{parseLocal(v.start).getFullYear()}</span></div>
       <div className="what">
         <p><span className="muted">{timeLabel(v.start)}</span>

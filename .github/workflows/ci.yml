@@ -79,6 +79,8 @@ jobs:
           cache-dependency-path: requirements*.txt
       - run: pip install -r requirements.txt
       - run: python scripts/simulate.py --weeks 6 --out /tmp/sim.json --require-improvement
+      - name: Assistant accuracy (keyword rules; the LLM run needs a live gateway, see README)
+        run: python scripts/eval_assistant.py --rules-only --min-accuracy 0.55 --out /tmp/assistant_eval.json
 
   frontend:
     name: React app type-checks and builds

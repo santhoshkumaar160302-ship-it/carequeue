@@ -340,8 +340,8 @@ def create_app(services: Services | None = None) -> FastAPI:
         return availability.remove_time_off(prov, time_off_id)
 
     @app.get("/api/doctor/patients")
-    def doctor_patients(q: str = "", prov: int = Depends(doctor)):
-        return visits.doctor_patients(prov, q)
+    def doctor_patients(q: str = "", group: str = "all", prov: int = Depends(doctor)):
+        return visits.doctor_patients(prov, q, group)
 
     @app.get("/api/doctor/patients/{patient_id}")
     def doctor_patient(patient_id: int, prov: int = Depends(doctor)):

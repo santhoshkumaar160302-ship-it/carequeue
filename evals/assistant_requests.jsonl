@@ -1,0 +1,60 @@
+{"id": 1, "text": "skin doctor next Tuesday morning", "provider": null, "specialty": "Dermatology", "earliest": "2026-10-20", "latest": "2026-10-20", "time_of_day": "morning"}
+{"id": 2, "text": "Can Dr. Patel see me tomorrow afternoon?", "provider": "Dr. Maya Patel", "specialty": null, "earliest": "2026-10-16", "latest": "2026-10-16", "time_of_day": "afternoon"}
+{"id": 3, "text": "my son has a fever, anything today", "provider": null, "specialty": "Pediatrics", "earliest": "2026-10-15", "latest": "2026-10-15", "time_of_day": "any"}
+{"id": 4, "text": "heart checkup next week", "provider": null, "specialty": "Cardiology", "earliest": "2026-10-19", "latest": "2026-10-23", "time_of_day": "any"}
+{"id": 5, "text": "I need to see Dr. Okafor this week", "provider": "Dr. James Okafor", "specialty": null, "earliest": "2026-10-15", "latest": "2026-10-16", "time_of_day": "any"}
+{"id": 6, "text": "rash on my arm, mornings only", "provider": null, "specialty": "Dermatology", "earliest": "2026-10-15", "latest": "2026-10-29", "time_of_day": "morning"}
+{"id": 7, "text": "annual physical sometime in the next two weeks", "provider": null, "specialty": "General Practice", "earliest": "2026-10-15", "latest": "2026-10-29", "time_of_day": "any"}
+{"id": 8, "text": "my daughter's ear hurts, can we come Monday after lunch", "provider": null, "specialty": "Pediatrics", "earliest": "2026-10-19", "latest": "2026-10-19", "time_of_day": "afternoon"}
+{"id": 9, "text": "Dr. Brooks on Friday", "provider": "Dr. Lena Brooks", "specialty": null, "earliest": "2026-10-16", "latest": "2026-10-16", "time_of_day": "any"}
+{"id": 10, "text": "acne follow up with the dermatologist, Wednesday 10am", "provider": null, "specialty": "Dermatology", "earliest": "2026-10-21", "latest": "2026-10-21", "time_of_day": "morning"}
+{"id": 11, "text": "flu shot tomorrow morning", "provider": null, "specialty": "General Practice", "earliest": "2026-10-16", "latest": "2026-10-16", "time_of_day": "morning"}
+{"id": 12, "text": "blood pressure check with Dr Mehta next Thursday", "provider": "Dr. Arjun Mehta", "specialty": null, "earliest": "2026-10-22", "latest": "2026-10-22", "time_of_day": "any"}
+{"id": 13, "text": "can my toddler see someone this afternoon", "provider": null, "specialty": "Pediatrics", "earliest": "2026-10-15", "latest": "2026-10-15", "time_of_day": "afternoon"}
+{"id": 14, "text": "I'd like a general checkup, any morning next week", "provider": null, "specialty": "General Practice", "earliest": "2026-10-19", "latest": "2026-10-23", "time_of_day": "morning"}
+{"id": 15, "text": "mole looks different, want it checked before Friday", "provider": null, "specialty": "Dermatology", "earliest": "2026-10-15", "latest": "2026-10-15", "time_of_day": "any"}
+{"id": 16, "text": "palpitations, need the heart doctor on Tuesday or Wednesday", "provider": null, "specialty": "Cardiology", "earliest": "2026-10-20", "latest": "2026-10-21", "time_of_day": "any"}
+{"id": 17, "text": "pediatrician for my baby's vaccines, Oct 22", "provider": null, "specialty": "Pediatrics", "earliest": "2026-10-22", "latest": "2026-10-22", "time_of_day": "any"}
+{"id": 18, "text": "Dr. Maya Patel 2026-10-27", "provider": "Dr. Maya Patel", "specialty": null, "earliest": "2026-10-27", "latest": "2026-10-27", "time_of_day": "any"}
+{"id": 19, "text": "eczema flare up, after 2pm please", "provider": null, "specialty": "Dermatology", "earliest": "2026-10-15", "latest": "2026-10-29", "time_of_day": "afternoon"}
+{"id": 20, "text": "sore throat and cough, today if possible", "provider": null, "specialty": "General Practice", "earliest": "2026-10-15", "latest": "2026-10-15", "time_of_day": "any"}
+{"id": 21, "text": "need a doctor for my kid's checkup sometime next week in the morning", "provider": null, "specialty": "Pediatrics", "earliest": "2026-10-19", "latest": "2026-10-23", "time_of_day": "morning"}
+{"id": 22, "text": "something with my skin, the week after next", "provider": null, "specialty": "Dermatology", "earliest": "2026-10-26", "latest": "2026-10-30", "time_of_day": "any"}
+{"id": 23, "text": "I want an appointment with the cardiologist on the 21st", "provider": null, "specialty": "Cardiology", "earliest": "2026-10-21", "latest": "2026-10-21", "time_of_day": "any"}
+{"id": 24, "text": "Okafor tomorrow", "provider": "Dr. James Okafor", "specialty": null, "earliest": "2026-10-16", "latest": "2026-10-16", "time_of_day": "any"}
+{"id": 25, "text": "Is Dr Lena Brooks free Monday morning?", "provider": "Dr. Lena Brooks", "specialty": null, "earliest": "2026-10-19", "latest": "2026-10-19", "time_of_day": "morning"}
+{"id": 26, "text": "chest feels tight, see a heart specialist this week, afternoons", "provider": null, "specialty": "Cardiology", "earliest": "2026-10-15", "latest": "2026-10-16", "time_of_day": "afternoon"}
+{"id": 27, "text": "my 6 year old needs a sports physical next Wednesday", "provider": null, "specialty": "Pediatrics", "earliest": "2026-10-21", "latest": "2026-10-21", "time_of_day": "any"}
+{"id": 28, "text": "itchy scalp, any time", "provider": null, "specialty": "Dermatology", "earliest": "2026-10-15", "latest": "2026-10-29", "time_of_day": "any"}
+{"id": 29, "text": "follow-up for my cholesterol results with my GP", "provider": null, "specialty": "General Practice", "earliest": "2026-10-15", "latest": "2026-10-29", "time_of_day": "any"}
+{"id": 30, "text": "dermatology appointment, mornings, this week or next", "provider": null, "specialty": "Dermatology", "earliest": "2026-10-15", "latest": "2026-10-23", "time_of_day": "morning"}
+{"id": 31, "text": "I'd like to see Dr. Patel", "provider": "Dr. Maya Patel", "specialty": null, "earliest": "2026-10-15", "latest": "2026-10-29", "time_of_day": "any"}
+{"id": 32, "text": "infant check, Friday morning", "provider": null, "specialty": "Pediatrics", "earliest": "2026-10-16", "latest": "2026-10-16", "time_of_day": "morning"}
+{"id": 33, "text": "heart murmur follow up after work", "provider": null, "specialty": "Cardiology", "earliest": "2026-10-15", "latest": "2026-10-29", "time_of_day": "afternoon"}
+{"id": 34, "text": "need a cardiologist before noon on Monday", "provider": null, "specialty": "Cardiology", "earliest": "2026-10-19", "latest": "2026-10-19", "time_of_day": "morning"}
+{"id": 35, "text": "weird spot on my back, can the skin doctor see me in the next 3 days", "provider": null, "specialty": "Dermatology", "earliest": "2026-10-15", "latest": "2026-10-18", "time_of_day": "any"}
+{"id": 36, "text": "general practice appointment next Monday at 9am", "provider": null, "specialty": "General Practice", "earliest": "2026-10-19", "latest": "2026-10-19", "time_of_day": "morning"}
+{"id": 37, "text": "my son's asthma check, Thursday afternoon", "provider": null, "specialty": "Pediatrics", "earliest": "2026-10-15", "latest": "2026-10-15", "time_of_day": "afternoon"}
+{"id": 38, "text": "can I get in with Mehta in the afternoon tomorrow", "provider": "Dr. Arjun Mehta", "specialty": null, "earliest": "2026-10-16", "latest": "2026-10-16", "time_of_day": "afternoon"}
+{"id": 39, "text": "back pain, need a doctor", "provider": null, "specialty": "General Practice", "earliest": "2026-10-15", "latest": "2026-10-29", "time_of_day": "any"}
+{"id": 40, "text": "high blood pressure readings, cardio next week afternoon", "provider": null, "specialty": "Cardiology", "earliest": "2026-10-19", "latest": "2026-10-23", "time_of_day": "afternoon"}
+{"id": 41, "text": "Dr. James Okafor, morning of the 20th", "provider": "Dr. James Okafor", "specialty": null, "earliest": "2026-10-20", "latest": "2026-10-20", "time_of_day": "morning"}
+{"id": 42, "text": "I have a cold, anything tomorrow or the day after", "provider": null, "specialty": "General Practice", "earliest": "2026-10-16", "latest": "2026-10-17", "time_of_day": "any"}
+{"id": 43, "text": "pediatrics, this week, mornings", "provider": null, "specialty": "Pediatrics", "earliest": "2026-10-15", "latest": "2026-10-16", "time_of_day": "morning"}
+{"id": 44, "text": "can my daughter see Dr. Okafor on Tuesday at 3pm", "provider": "Dr. James Okafor", "specialty": null, "earliest": "2026-10-20", "latest": "2026-10-20", "time_of_day": "afternoon"}
+{"id": 45, "text": "headache that won't go away", "provider": null, "specialty": "General Practice", "earliest": "2026-10-15", "latest": "2026-10-29", "time_of_day": "any"}
+{"id": 46, "text": "I'd like Dr. Brooks for a skin tag removal next week", "provider": "Dr. Lena Brooks", "specialty": null, "earliest": "2026-10-19", "latest": "2026-10-23", "time_of_day": "any"}
+{"id": 47, "text": "cardiology on Oct 28 in the morning", "provider": null, "specialty": "Cardiology", "earliest": "2026-10-28", "latest": "2026-10-28", "time_of_day": "morning"}
+{"id": 48, "text": "today please, general doctor, I have a fever", "provider": null, "specialty": "General Practice", "earliest": "2026-10-15", "latest": "2026-10-15", "time_of_day": "any"}
+{"id": 49, "text": "my kid threw up last night, can we come this morning", "provider": null, "specialty": "Pediatrics", "earliest": "2026-10-15", "latest": "2026-10-15", "time_of_day": "morning"}
+{"id": 50, "text": "skin doctor on 2026-10-22 afternoon", "provider": null, "specialty": "Dermatology", "earliest": "2026-10-22", "latest": "2026-10-22", "time_of_day": "afternoon"}
+{"id": 51, "text": "Patel, any afternoon next week", "provider": "Dr. Maya Patel", "specialty": null, "earliest": "2026-10-19", "latest": "2026-10-23", "time_of_day": "afternoon"}
+{"id": 52, "text": "chest pain", "provider": null, "specialty": "Cardiology", "earliest": "2026-10-15", "latest": "2026-10-29", "time_of_day": "any"}
+{"id": 53, "text": "flu symptoms, Monday or Tuesday morning", "provider": null, "specialty": "General Practice", "earliest": "2026-10-19", "latest": "2026-10-20", "time_of_day": "morning"}
+{"id": 54, "text": "heart doctor tmrw", "provider": null, "specialty": "Cardiology", "earliest": "2026-10-16", "latest": "2026-10-16", "time_of_day": "any"}
+{"id": 55, "text": "dermatolgy apointment nxt week", "provider": null, "specialty": "Dermatology", "earliest": "2026-10-19", "latest": "2026-10-23", "time_of_day": "any"}
+{"id": 56, "text": "see dr patel on wensday", "provider": "Dr. Maya Patel", "specialty": null, "earliest": "2026-10-21", "latest": "2026-10-21", "time_of_day": "any"}
+{"id": 57, "text": "any doctor for a physical, the 19th or 20th", "provider": null, "specialty": "General Practice", "earliest": "2026-10-19", "latest": "2026-10-20", "time_of_day": "any"}
+{"id": 58, "text": "my baby has a rash and a fever, pediatrician tomorrow", "provider": null, "specialty": "Pediatrics", "earliest": "2026-10-16", "latest": "2026-10-16", "time_of_day": "any"}
+{"id": 59, "text": "Brooks, Monday or Tuesday next week", "provider": "Dr. Lena Brooks", "specialty": null, "earliest": "2026-10-19", "latest": "2026-10-20", "time_of_day": "any"}
+{"id": 60, "text": "can I see the children's doctor on Friday after school", "provider": null, "specialty": "Pediatrics", "earliest": "2026-10-16", "latest": "2026-10-16", "time_of_day": "afternoon"}

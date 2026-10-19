@@ -118,6 +118,36 @@ The gain comes from **late cancellations**. A slot freed a day ahead is rarely t
 
 These numbers depend on the assumptions above. With fewer late cancellations, or more same-day demand, the gain shrinks. The script's flags (`--load`, `--cancel-rate`, `--same-day-share`, `--waitlist-rate`) let you test other clinics. Full results are in `results/simulation.json`.
 
+## Results: does the AI search help?
+
+The "Find a time" box can understand requests in two ways: keyword rules, or an LLM through NexusAI. `python scripts/eval_assistant.py` measures both on 60 labeled requests (`evals/assistant_requests.jsonl`), each with the right doctor or specialty, dates and time of day. They range from easy ("Okafor tomorrow") to messy ("dermatolgy apointment nxt week", "my 6 year old needs a sports physical next Wednesday"). "Today" is fixed at Thursday, Oct 15, 2026, so the labels don't go stale.
+
+| | Keyword rules |
+| --- | --- |
+| Fully correct (every field) | 35/60 (58%) |
+| Doctor or specialty | 55/60 (92%) |
+| First date | 50/60 (83%) |
+| Last date | 42/60 (70%) |
+| Time of day | 58/60 (97%) |
+
+The rules get the doctor right most of the time but struggle with dates: "Oct 22", "the 21st", "Tuesday or Wednesday", "in the next 3 days", "tmrw". That's the gap the LLM is there to close.
+
+To score the LLM, point the script at a gateway:
+
+```bash
+python scripts/eval_assistant.py --nexusai-url https://nexusai-latest.onrender.com --show-failures
+```
+
+It reports the LLM alone, and what patients actually get: the LLM's answer if it arrives within the app's time limit (`NEXUSAI_TIMEOUT_S`, 3 seconds by default), otherwise the rules. It also reports latency (mean and p95), cache hits, the models NexusAI chose, and the cost per 1,000 requests. NexusAI's cache is bypassed during the test (`--use-cache` turns it back on), so every answer and every timing comes from a model.
+
+Two safeguards sit between the model and the search:
+- **A time limit.** A search waits at most 3 seconds for the LLM, then the rules answer. A slow model can make results less precise, never slow.
+- **A check against the patient's own words.** If the model narrows the search to a doctor the patient never named ("my son has a fever" → Dr. Okafor), the search widens to that doctor's specialty, so other doctors' open times aren't hidden. The model's other answers are validated too: unknown doctors and impossible dates are rejected.
+
+Results are saved to `results/assistant_eval.json`. CI runs the rules on every push and fails if they drop below 55%; the LLM run is manual because it calls real models.
+
+One caveat: the prompt spells out the clinic's conventions ("next Tuesday" means Tuesday of next week, children go to Pediatrics even for a rash). Those conventions match how the requests were labeled, so this measures how well each approach follows the clinic's rules. It isn't a general benchmark of language understanding.
+
 ## API
 
 Everything except health, the list of doctors and sign-in needs a session cookie. Patient routes always act on the signed-in patient and doctor routes on the signed-in doctor; ids sent by the browser can't point them at someone else.
@@ -152,7 +182,7 @@ Interactive API docs are at `/docs`.
 pytest
 ```
 
-There are 57 tests, and every scheduling test runs on both SQLite and PostgreSQL (103 runs in all). They cover:
+There are 64 tests, and every scheduling test runs on both SQLite and PostgreSQL (110 runs in all). They cover:
 - **booking:** double-booking under real concurrency (20 threads racing for one slot on PostgreSQL, exactly one wins), past slots, and patients double-booked at the same time;
 - **the waitlist:** first in line, matching by doctor, specialty and time of day, holds, declines, expiry, moving up and the chain it sets off, and idempotent event handling;
 - **events:** outbox publishing;
@@ -160,7 +190,7 @@ There are 57 tests, and every scheduling test runs on both SQLite and PostgreSQL
 - **availability:** shorter hours, time off that displaces patients to the front of the line, withdrawing offers in blocked time, reopening time;
 - **visits:** closing visits only after they start, notes, the next patient, and doctors only seeing their own patients;
 - **sign-in and roles:** registering, wrong passwords, the sign-in limit, patients kept out of doctor routes and the reverse, and nobody touching another patient's appointments;
-- **the assistant:** the keyword parser, validation of LLM output, and falling back when the gateway fails;
+- **the assistant:** the keyword parser, validation of LLM output, widening a doctor the patient never named to their specialty, falling back when the gateway fails, and the accuracy test's scoring (a perfect fake gateway must score 100%, and a dead or too-slow one must score exactly like the rules);
 - **the HTTP API.**
 
 To include PostgreSQL, Redis and RabbitMQ locally, set `CQ_TEST_DATABASE_URL`, `CQ_TEST_REDIS_URL` and `CQ_TEST_RABBITMQ_URL`. CI does this on every push, and coverage is 93%.
@@ -200,6 +230,7 @@ carequeue/
   worker.py      standalone background worker
   seed.py        demo clinic data
 frontend/        React + TypeScript app (Vite)
-scripts/         simulate.py
+scripts/         simulate.py, eval_assistant.py
+evals/           labeled requests for the assistant accuracy test
 tests/           pytest suite
 ```

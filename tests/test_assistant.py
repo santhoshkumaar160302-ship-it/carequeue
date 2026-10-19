@@ -79,3 +79,14 @@ def test_rules_only_without_a_gateway(clinic):
     assert all(o["start"].startswith("2026-10-14T") for o in out["options"])
     with pytest.raises(ValueError):
         Assistant(clinic, None).suggest("   ")
+
+
+def test_a_doctor_the_patient_never_named_becomes_their_specialty():
+    from carequeue.assistant import keep_unnamed_doctors_open, named_in
+
+    picked = validate_llm_intent({"provider": "Dr. Lena Brooks", "earliest": "2026-10-13"}, TODAY, PROVIDERS)
+    widened = keep_unnamed_doctors_open(picked, "something for my rash", PROVIDERS)
+    assert widened.provider_id is None and widened.specialty == "Dermatology"
+    named = validate_llm_intent({"provider": "Dr. Lena Brooks", "earliest": "2026-10-13"}, TODAY, PROVIDERS)
+    assert keep_unnamed_doctors_open(named, "can dr brooks see me", PROVIDERS).provider_id == 2
+    assert named_in("Lena on Friday?", "Dr. Lena Brooks") and not named_in("dr. b", "Dr. Lena Brooks")

@@ -31,7 +31,8 @@ class Settings:
     rabbitmq_url: str | None = None
     nexusai_url: str | None = None  # natural-language booking goes through this gateway when set
     nexusai_api_key: str | None = None
-    nexusai_timeout_s: float = 25.0
+    # How long a patient's search waits for the LLM before the keyword rules answer instead.
+    nexusai_timeout_s: float = 3.0
     hold_minutes: int = 15  # how long a freed slot is held for a waitlisted patient
     min_notice_minutes: int = 60  # don't offer slots starting sooner than this
     cache_ttl_s: int = 60

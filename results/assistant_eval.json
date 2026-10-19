@@ -1,0 +1,545 @@
+{
+  "today": "2026-10-15",
+  "cases": 60,
+  "gateway": "https://nexusai-latest.onrender.com",
+  "app_timeout_s": 3.0,
+  "results": {
+    "rules": {
+      "requests": 60,
+      "accuracy": {
+        "doctor": 0.9167,
+        "earliest": 0.8333,
+        "latest": 0.7,
+        "time_of_day": 0.9667,
+        "all": 0.5833
+      },
+      "latency_ms": {
+        "mean": 0.1,
+        "p95": 0.1
+      }
+    },
+    "llm": {
+      "requests": 60,
+      "accuracy": {
+        "doctor": 1.0,
+        "earliest": 0.9833,
+        "latest": 0.9667,
+        "time_of_day": 1.0,
+        "all": 0.9667
+      },
+      "latency_ms": {
+        "mean": 1944.2,
+        "p95": 6221.0
+      },
+      "errors": 0,
+      "models": {
+        "gemini-3.1-flash-lite": 30,
+        "gemini-3.5-flash-lite": 29,
+        "gemini-3.6-flash": 1
+      },
+      "cache_hits": 0,
+      "cost_usd": 0.014844,
+      "cost_per_1000_usd": 0.2474
+    },
+    "app": {
+      "requests": 60,
+      "accuracy": {
+        "doctor": 1.0,
+        "earliest": 0.9667,
+        "latest": 0.9,
+        "time_of_day": 1.0,
+        "all": 0.9
+      },
+      "latency_ms": {
+        "mean": 1385.0,
+        "p95": 3000.0
+      },
+      "late": 11,
+      "errors": 0,
+      "models": {
+        "gemini-3.1-flash-lite": 30,
+        "gemini-3.5-flash-lite": 29,
+        "gemini-3.6-flash": 1
+      },
+      "cache_hits": 0,
+      "cost_usd": 0.014844,
+      "cost_per_1000_usd": 0.2474
+    }
+  },
+  "failures": {
+    "rules": [
+      {
+        "id": 13,
+        "text": "can my toddler see someone this afternoon",
+        "wrong": [
+          "latest"
+        ],
+        "expected": {
+          "latest": "2026-10-15"
+        },
+        "got": {
+          "latest": "2026-10-29"
+        }
+      },
+      {
+        "id": 15,
+        "text": "mole looks different, want it checked before Friday",
+        "wrong": [
+          "earliest",
+          "latest"
+        ],
+        "expected": {
+          "earliest": "2026-10-15",
+          "latest": "2026-10-15"
+        },
+        "got": {
+          "earliest": "2026-10-16",
+          "latest": "2026-10-16"
+        }
+      },
+      {
+        "id": 16,
+        "text": "palpitations, need the heart doctor on Tuesday or Wednesday",
+        "wrong": [
+          "latest"
+        ],
+        "expected": {
+          "latest": "2026-10-21"
+        },
+        "got": {
+          "latest": "2026-10-20"
+        }
+      },
+      {
+        "id": 17,
+        "text": "pediatrician for my baby's vaccines, Oct 22",
+        "wrong": [
+          "earliest",
+          "latest"
+        ],
+        "expected": {
+          "earliest": "2026-10-22",
+          "latest": "2026-10-22"
+        },
+        "got": {
+          "earliest": "2026-10-15",
+          "latest": "2026-10-29"
+        }
+      },
+      {
+        "id": 22,
+        "text": "something with my skin, the week after next",
+        "wrong": [
+          "earliest",
+          "latest"
+        ],
+        "expected": {
+          "earliest": "2026-10-26",
+          "latest": "2026-10-30"
+        },
+        "got": {
+          "earliest": "2026-10-15",
+          "latest": "2026-10-29"
+        }
+      },
+      {
+        "id": 23,
+        "text": "I want an appointment with the cardiologist on the 21st",
+        "wrong": [
+          "earliest",
+          "latest"
+        ],
+        "expected": {
+          "earliest": "2026-10-21",
+          "latest": "2026-10-21"
+        },
+        "got": {
+          "earliest": "2026-10-15",
+          "latest": "2026-10-29"
+        }
+      },
+      {
+        "id": 27,
+        "text": "my 6 year old needs a sports physical next Wednesday",
+        "wrong": [
+          "doctor"
+        ],
+        "expected": {
+          "doctor": "Pediatrics"
+        },
+        "got": {
+          "doctor": "General Practice"
+        }
+      },
+      {
+        "id": 28,
+        "text": "itchy scalp, any time",
+        "wrong": [
+          "doctor"
+        ],
+        "expected": {
+          "doctor": "Dermatology"
+        },
+        "got": {
+          "doctor": null
+        }
+      },
+      {
+        "id": 30,
+        "text": "dermatology appointment, mornings, this week or next",
+        "wrong": [
+          "latest"
+        ],
+        "expected": {
+          "latest": "2026-10-23"
+        },
+        "got": {
+          "latest": "2026-10-16"
+        }
+      },
+      {
+        "id": 33,
+        "text": "heart murmur follow up after work",
+        "wrong": [
+          "time_of_day"
+        ],
+        "expected": {
+          "time_of_day": "afternoon"
+        },
+        "got": {
+          "time_of_day": "any"
+        }
+      },
+      {
+        "id": 35,
+        "text": "weird spot on my back, can the skin doctor see me in the next 3 days",
+        "wrong": [
+          "latest"
+        ],
+        "expected": {
+          "latest": "2026-10-18"
+        },
+        "got": {
+          "latest": "2026-10-29"
+        }
+      },
+      {
+        "id": 39,
+        "text": "back pain, need a doctor",
+        "wrong": [
+          "doctor"
+        ],
+        "expected": {
+          "doctor": "General Practice"
+        },
+        "got": {
+          "doctor": null
+        }
+      },
+      {
+        "id": 41,
+        "text": "Dr. James Okafor, morning of the 20th",
+        "wrong": [
+          "earliest",
+          "latest"
+        ],
+        "expected": {
+          "earliest": "2026-10-20",
+          "latest": "2026-10-20"
+        },
+        "got": {
+          "earliest": "2026-10-15",
+          "latest": "2026-10-29"
+        }
+      },
+      {
+        "id": 42,
+        "text": "I have a cold, anything tomorrow or the day after",
+        "wrong": [
+          "latest"
+        ],
+        "expected": {
+          "latest": "2026-10-17"
+        },
+        "got": {
+          "latest": "2026-10-16"
+        }
+      },
+      {
+        "id": 45,
+        "text": "headache that won't go away",
+        "wrong": [
+          "doctor"
+        ],
+        "expected": {
+          "doctor": "General Practice"
+        },
+        "got": {
+          "doctor": null
+        }
+      },
+      {
+        "id": 47,
+        "text": "cardiology on Oct 28 in the morning",
+        "wrong": [
+          "earliest",
+          "latest"
+        ],
+        "expected": {
+          "earliest": "2026-10-28",
+          "latest": "2026-10-28"
+        },
+        "got": {
+          "earliest": "2026-10-15",
+          "latest": "2026-10-29"
+        }
+      },
+      {
+        "id": 49,
+        "text": "my kid threw up last night, can we come this morning",
+        "wrong": [
+          "latest"
+        ],
+        "expected": {
+          "latest": "2026-10-15"
+        },
+        "got": {
+          "latest": "2026-10-29"
+        }
+      },
+      {
+        "id": 53,
+        "text": "flu symptoms, Monday or Tuesday morning",
+        "wrong": [
+          "latest"
+        ],
+        "expected": {
+          "latest": "2026-10-20"
+        },
+        "got": {
+          "latest": "2026-10-19"
+        }
+      },
+      {
+        "id": 54,
+        "text": "heart doctor tmrw",
+        "wrong": [
+          "earliest",
+          "latest"
+        ],
+        "expected": {
+          "earliest": "2026-10-16",
+          "latest": "2026-10-16"
+        },
+        "got": {
+          "earliest": "2026-10-15",
+          "latest": "2026-10-29"
+        }
+      },
+      {
+        "id": 55,
+        "text": "dermatolgy apointment nxt week",
+        "wrong": [
+          "earliest",
+          "latest"
+        ],
+        "expected": {
+          "earliest": "2026-10-19",
+          "latest": "2026-10-23"
+        },
+        "got": {
+          "earliest": "2026-10-15",
+          "latest": "2026-10-29"
+        }
+      },
+      {
+        "id": 56,
+        "text": "see dr patel on wensday",
+        "wrong": [
+          "earliest",
+          "latest"
+        ],
+        "expected": {
+          "earliest": "2026-10-21",
+          "latest": "2026-10-21"
+        },
+        "got": {
+          "earliest": "2026-10-15",
+          "latest": "2026-10-29"
+        }
+      },
+      {
+        "id": 57,
+        "text": "any doctor for a physical, the 19th or 20th",
+        "wrong": [
+          "earliest",
+          "latest"
+        ],
+        "expected": {
+          "earliest": "2026-10-19",
+          "latest": "2026-10-20"
+        },
+        "got": {
+          "earliest": "2026-10-15",
+          "latest": "2026-10-29"
+        }
+      },
+      {
+        "id": 58,
+        "text": "my baby has a rash and a fever, pediatrician tomorrow",
+        "wrong": [
+          "doctor"
+        ],
+        "expected": {
+          "doctor": "Pediatrics"
+        },
+        "got": {
+          "doctor": "Dermatology"
+        }
+      },
+      {
+        "id": 59,
+        "text": "Brooks, Monday or Tuesday next week",
+        "wrong": [
+          "latest"
+        ],
+        "expected": {
+          "latest": "2026-10-20"
+        },
+        "got": {
+          "latest": "2026-10-23"
+        }
+      },
+      {
+        "id": 60,
+        "text": "can I see the children's doctor on Friday after school",
+        "wrong": [
+          "time_of_day"
+        ],
+        "expected": {
+          "time_of_day": "afternoon"
+        },
+        "got": {
+          "time_of_day": "any"
+        }
+      }
+    ],
+    "llm": [
+      {
+        "id": 35,
+        "text": "weird spot on my back, can the skin doctor see me in the next 3 days",
+        "wrong": [
+          "latest"
+        ],
+        "expected": {
+          "latest": "2026-10-18"
+        },
+        "got": {
+          "latest": "2026-10-17"
+        }
+      },
+      {
+        "id": 37,
+        "text": "my son's asthma check, Thursday afternoon",
+        "wrong": [
+          "earliest",
+          "latest"
+        ],
+        "expected": {
+          "earliest": "2026-10-15",
+          "latest": "2026-10-15"
+        },
+        "got": {
+          "earliest": "2026-10-22",
+          "latest": "2026-10-22"
+        }
+      }
+    ],
+    "app": [
+      {
+        "id": 13,
+        "text": "can my toddler see someone this afternoon",
+        "wrong": [
+          "latest"
+        ],
+        "expected": {
+          "latest": "2026-10-15"
+        },
+        "got": {
+          "latest": "2026-10-29"
+        }
+      },
+      {
+        "id": 30,
+        "text": "dermatology appointment, mornings, this week or next",
+        "wrong": [
+          "latest"
+        ],
+        "expected": {
+          "latest": "2026-10-23"
+        },
+        "got": {
+          "latest": "2026-10-16"
+        }
+      },
+      {
+        "id": 35,
+        "text": "weird spot on my back, can the skin doctor see me in the next 3 days",
+        "wrong": [
+          "latest"
+        ],
+        "expected": {
+          "latest": "2026-10-18"
+        },
+        "got": {
+          "latest": "2026-10-17"
+        }
+      },
+      {
+        "id": 37,
+        "text": "my son's asthma check, Thursday afternoon",
+        "wrong": [
+          "earliest",
+          "latest"
+        ],
+        "expected": {
+          "earliest": "2026-10-15",
+          "latest": "2026-10-15"
+        },
+        "got": {
+          "earliest": "2026-10-22",
+          "latest": "2026-10-22"
+        }
+      },
+      {
+        "id": 42,
+        "text": "I have a cold, anything tomorrow or the day after",
+        "wrong": [
+          "latest"
+        ],
+        "expected": {
+          "latest": "2026-10-17"
+        },
+        "got": {
+          "latest": "2026-10-16"
+        }
+      },
+      {
+        "id": 47,
+        "text": "cardiology on Oct 28 in the morning",
+        "wrong": [
+          "earliest",
+          "latest"
+        ],
+        "expected": {
+          "earliest": "2026-10-28",
+          "latest": "2026-10-28"
+        },
+        "got": {
+          "earliest": "2026-10-15",
+          "latest": "2026-10-29"
+        }
+      }
+    ]
+  }
+}

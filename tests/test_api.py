@@ -194,3 +194,14 @@ def test_services_without_an_engine_still_report_health():
     _, services = make_client()
     bare = TestClient(create_app(Services(services.settings, services.clinic, services.assistant, None)))
     assert bare.get("/api/health").json()["database"] == "unknown"
+
+
+def test_doctor_patient_list_filters_by_group():
+    client, _ = make_client()
+    as_doctor(client)
+    every = client.get("/api/doctor/patients").json()
+    mine = client.get("/api/doctor/patients", params={"group": "mine"}).json()
+    new = client.get("/api/doctor/patients", params={"group": "new"}).json()
+    assert mine and new and len(mine) + len(new) == len(every)
+    assert all(p["visits"] > 0 for p in mine) and all(p["visits"] == 0 for p in new)
+    assert client.get("/api/doctor/patients", params={"group": "nope"}).status_code == 400

@@ -295,6 +295,16 @@ input:focus-visible, select:focus-visible, textarea:focus-visible { outline: 2px
 .plist a.on { background: var(--ink); color: var(--bg); }
 .plist a.on .muted { color: inherit; opacity: 0.8; }
 .search { width: 100%; }
+.plist .seg button { padding: 7px 8px; }
+.plist .seg .count { font-weight: 400; color: var(--muted); margin-left: 2px; }
+.plist .seg button.on .count { color: var(--ink); }
+.filter-hint { margin-top: -4px; }
+.pname { display: flex; align-items: center; gap: 6px; }
+.pname .tag { margin-left: 0; }
+.tag.new { background: var(--hold-soft); color: var(--hold-ink); }
+.plist a.on .tag.new { background: var(--hold); color: #3a2600; }
+.prec h2 .tag { vertical-align: 5px; }
+.note-box { background: var(--surface-2); border-radius: 12px; padding: 10px 14px; margin-top: 12px; font-size: 15px; }
 .prec h2 { font-size: 28px; letter-spacing: -0.02em; }
 .prec h3 { margin-top: 22px; }
 .back { display: none; margin-bottom: 8px; }
@@ -334,6 +344,7 @@ input:focus-visible, select:focus-visible, textarea:focus-visible { outline: 2px
   .card { padding: 16px; }
   .panel { padding: 18px; }
   .who-name { display: none; }
+  .tabs a { padding: 8px 10px; font-size: 14.5px; }
   .who { padding-right: 12px; }
   .stats { grid-template-columns: repeat(3, minmax(0, 1fr)); }
   .doc-pick { grid-template-columns: repeat(2, minmax(0, 1fr)); }

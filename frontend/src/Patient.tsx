@@ -1,7 +1,7 @@
 import { FormEvent, useEffect, useState } from "react";
 import type { Shell } from "./App";
 import {
-  addDays, api, CANCEL_LABEL, dayLabel, longDay, MyWaitlist, Overview, parseLocal, Slot, STATUS_LABEL, Suggestion,
+  LOCALE, addDays, api, CANCEL_LABEL, dayLabel, longDay, MyWaitlist, Overview, parseLocal, Slot, STATUS_LABEL, Suggestion,
   timeLabel, until, Visit, Week,
 } from "./api";
 import { Legend, WeekGrid, WeekNav } from "./Calendar";
@@ -352,7 +352,7 @@ function History({ shell }: { shell: Shell }) {
         <ol className="timeline">
           {shown.map((v) => (
             <li key={v.id} className={v.status}>
-              <div className="when"><b>{parseLocal(v.start).toLocaleDateString([], { month: "short", day: "numeric" })}</b>
+              <div className="when"><b>{parseLocal(v.start).toLocaleDateString(LOCALE, { month: "short", day: "numeric" })}</b>
                 <span className="muted small">{parseLocal(v.start).getFullYear()}</span></div>
               <div className="what">
                 <p><b>{v.provider}</b> <span className="muted">{v.specialty}, {timeLabel(v.start)}</span>
