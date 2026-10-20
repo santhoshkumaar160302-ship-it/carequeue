@@ -14,6 +14,7 @@ from sqlalchemy import (
     Boolean,
     Date,
     DateTime,
+    Float,
     ForeignKey,
     Index,
     Integer,
@@ -48,6 +49,8 @@ class Patient(Base):
     phone: Mapped[str] = mapped_column(String(30))
     # Demo personas appear in the "viewing as" picker; everyone else just fills the schedule.
     featured: Mapped[bool] = mapped_column(Boolean, default=False)
+    birth_date: Mapped[date | None] = mapped_column(Date, nullable=True)
+    sex: Mapped[str | None] = mapped_column(String(10), nullable=True)  # female | male | other
 
 
 class Slot(Base):
@@ -75,7 +78,7 @@ class WaitlistEntry(Base):
     specialty: Mapped[str | None] = mapped_column(String(50), nullable=True)
     earliest: Mapped[date] = mapped_column(Date)
     latest: Mapped[date] = mapped_column(Date)
-    time_of_day: Mapped[str] = mapped_column(String(10), default="any")  # any | morning | afternoon
+    time_of_day: Mapped[str] = mapped_column(String(10), default="any")  # any | morning | afternoon | evening | night
     # waiting -> offered -> booked, or back to waiting if the offer is declined or expires
     status: Mapped[str] = mapped_column(String(10), default="waiting", index=True)
     created_at: Mapped[datetime] = mapped_column(DateTime)
@@ -203,3 +206,90 @@ class UserSession(Base):
     user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), index=True)
     created_at: Mapped[datetime] = mapped_column(DateTime)
     expires_at: Mapped[datetime] = mapped_column(DateTime)
+
+
+# ---------------------------------------------------------------------------- the patient chart
+# One clinic-wide chart per patient. Shaped after FHIR R4 resources (AllergyIntolerance,
+# Condition, MedicationStatement, Observation) and coded with the same terminologies
+# (SNOMED CT, RxNorm, LOINC), so carequeue/fhir.py can serve it as standard FHIR.
+# `source` is "synthea" for the demo's synthetic history and "clinic" for what doctors add.
+
+
+class Allergy(Base):
+    __tablename__ = "allergies"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    patient_id: Mapped[int] = mapped_column(ForeignKey("patients.id"), index=True)
+    substance: Mapped[str] = mapped_column(String(200))
+    code: Mapped[str | None] = mapped_column(String(30), nullable=True)  # SNOMED CT
+    category: Mapped[str | None] = mapped_column(String(20), nullable=True)  # food | medication | environment
+    criticality: Mapped[str | None] = mapped_column(String(20), nullable=True)  # low | high | unable-to-assess
+    reaction: Mapped[str | None] = mapped_column(String(200), nullable=True)
+    status: Mapped[str] = mapped_column(String(10), default="active")  # active | inactive
+    recorded_on: Mapped[date | None] = mapped_column(Date, nullable=True)
+    recorded_by: Mapped[int | None] = mapped_column(ForeignKey("providers.id"), nullable=True)
+    source: Mapped[str] = mapped_column(String(10), default="clinic")
+
+
+class Condition(Base):
+    __tablename__ = "conditions"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    patient_id: Mapped[int] = mapped_column(ForeignKey("patients.id"), index=True)
+    name: Mapped[str] = mapped_column(String(200))
+    code: Mapped[str | None] = mapped_column(String(30), nullable=True)  # SNOMED CT
+    status: Mapped[str] = mapped_column(String(10), default="active")  # active | resolved
+    onset: Mapped[date | None] = mapped_column(Date, nullable=True)
+    resolved: Mapped[date | None] = mapped_column(Date, nullable=True)
+    recorded_by: Mapped[int | None] = mapped_column(ForeignKey("providers.id"), nullable=True)
+    source: Mapped[str] = mapped_column(String(10), default="clinic")
+
+
+class Medication(Base):
+    __tablename__ = "medications"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    patient_id: Mapped[int] = mapped_column(ForeignKey("patients.id"), index=True)
+    name: Mapped[str] = mapped_column(String(300))
+    code: Mapped[str | None] = mapped_column(String(30), nullable=True)  # RxNorm
+    dosage: Mapped[str | None] = mapped_column(String(200), nullable=True)  # "1 tablet daily"
+    status: Mapped[str] = mapped_column(String(10), default="active")  # active | stopped
+    started: Mapped[date | None] = mapped_column(Date, nullable=True)
+    stopped: Mapped[date | None] = mapped_column(Date, nullable=True)
+    prescribed_by: Mapped[int | None] = mapped_column(ForeignKey("providers.id"), nullable=True)
+    source: Mapped[str] = mapped_column(String(10), default="clinic")
+
+
+class Vitals(Base):
+    """One set of readings, usually taken at a visit. Any of them can be missing."""
+
+    __tablename__ = "vitals"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    patient_id: Mapped[int] = mapped_column(ForeignKey("patients.id"), index=True)
+    appointment_id: Mapped[int | None] = mapped_column(ForeignKey("appointments.id"), nullable=True, index=True)
+    taken_at: Mapped[datetime] = mapped_column(DateTime, index=True)
+    systolic: Mapped[float | None] = mapped_column(Float, nullable=True)  # mmHg
+    diastolic: Mapped[float | None] = mapped_column(Float, nullable=True)  # mmHg
+    heart_rate: Mapped[float | None] = mapped_column(Float, nullable=True)  # beats per minute
+    temperature_c: Mapped[float | None] = mapped_column(Float, nullable=True)
+    weight_kg: Mapped[float | None] = mapped_column(Float, nullable=True)
+    height_cm: Mapped[float | None] = mapped_column(Float, nullable=True)
+    bmi: Mapped[float | None] = mapped_column(Float, nullable=True)
+    recorded_by: Mapped[int | None] = mapped_column(ForeignKey("providers.id"), nullable=True)
+    source: Mapped[str] = mapped_column(String(10), default="clinic")
+
+
+class AuditEvent(Base):
+    """Who looked at or changed a patient's record, and when. Never updated or deleted by the app."""
+
+    __tablename__ = "audit_log"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    at: Mapped[datetime] = mapped_column(DateTime, index=True)
+    user_id: Mapped[int | None] = mapped_column(ForeignKey("users.id"), nullable=True)
+    actor: Mapped[str] = mapped_column(String(100))  # "Dr. Maya Patel", or the patient's own name
+    role: Mapped[str] = mapped_column(String(10))  # doctor | patient
+    action: Mapped[str] = mapped_column(String(40))  # view_chart | add_allergy | stop_medication | ...
+    patient_id: Mapped[int] = mapped_column(ForeignKey("patients.id"), index=True)
+    detail: Mapped[str] = mapped_column(String(300), default="")

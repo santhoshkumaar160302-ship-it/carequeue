@@ -1,8 +1,12 @@
 """Doctors' working hours and time off, and what happens to patients when they change.
 
-Slots are generated on a fixed grid (8:00-18:00 by default). Whether a slot can be booked
-is decided here: a slot outside the doctor's weekly hours, or inside a block of time off,
+Slots are generated around the clock, every day, on a 30-minute grid. Whether a slot can be
+booked is decided here: a slot outside the doctor's weekly hours, or inside a block of time off,
 is marked unavailable (`Slot.blocked_reason`).
+
+Each working day is one of four 8-hour shifts (morning, day, evening, night) or custom hours.
+A shift whose end is earlier than its start runs past midnight: night 22:00-06:00 on Monday
+covers Monday 22:00 to Tuesday 06:00.
 
 When a doctor blocks time that already has patients in it, those visits are cancelled,
 the patients are told, and each one goes to the front of the waitlist for that doctor, so
@@ -21,13 +25,38 @@ from .models import Appointment, Provider, Slot, TimeOff, WaitlistEntry, Working
 
 WEEKDAYS = ("Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday")
 REBOOK_WINDOW_DAYS = 14  # how far ahead a displaced patient is offered a new slot
+DAY_MINUTES = 24 * 60
+SHIFTS = {  # name: (start, end, label)
+    "morning": ("06:00", "14:00", "Morning"),
+    "day": ("09:00", "17:00", "Day"),
+    "evening": ("14:00", "22:00", "Evening"),
+    "night": ("22:00", "06:00", "Night"),
+}
 
 
 @dataclass
 class Day:
     weekday: int
     start_minute: int
-    end_minute: int
+    end_minute: int  # earlier than start_minute: the shift ends the next morning
+
+    @property
+    def overnight(self) -> bool:
+        return self.end_minute <= self.start_minute
+
+
+def _covered(hours: dict[int, Day], start: datetime, end: datetime) -> bool:
+    """Is the whole slot inside the doctor's hours, counting last night's shift running past midnight?"""
+    m0 = _minute(start)
+    m1 = m0 + int((end - start).total_seconds() // 60)
+    day = hours.get(start.weekday())
+    if day is not None:
+        if day.overnight and m0 >= day.start_minute:
+            return True
+        if not day.overnight and day.start_minute <= m0 and m1 <= day.end_minute:
+            return True
+    prev = hours.get((start.weekday() - 1) % 7)
+    return prev is not None and prev.overnight and m1 <= prev.end_minute
 
 
 def _minute(dt: datetime) -> int:
@@ -36,6 +65,10 @@ def _minute(dt: datetime) -> int:
 
 def _hhmm(minute: int) -> str:
     return f"{minute // 60:02d}:{minute % 60:02d}"
+
+
+def _shift_name(start: str, end: str) -> str:
+    return next((name for name, (s, e, _label) in SHIFTS.items() if (s, e) == (start, end)), "custom")
 
 
 class Availability:
@@ -49,9 +82,18 @@ class Availability:
         with self.Session() as s:
             q = select(WorkingHours).where(WorkingHours.provider_id == provider_id)
             rows = {h.weekday: h for h in s.scalars(q)}
-        return [{"weekday": d, "name": WEEKDAYS[d], "working": d in rows,
-                 "start": _hhmm(rows[d].start_minute) if d in rows else None,
-                 "end": _hhmm(rows[d].end_minute) if d in rows else None} for d in range(7)]
+        out = []
+        for d in range(7):
+            start = _hhmm(rows[d].start_minute) if d in rows else None
+            end = _hhmm(rows[d].end_minute) if d in rows else None
+            out.append({"weekday": d, "name": WEEKDAYS[d], "working": d in rows, "start": start, "end": end,
+                        "shift": _shift_name(start, end) if d in rows else None,
+                        "overnight": d in rows and rows[d].end_minute <= rows[d].start_minute})
+        return out
+
+    @staticmethod
+    def shifts() -> list[dict]:
+        return [{"name": n, "label": label, "start": s, "end": e} for n, (s, e, label) in SHIFTS.items()]
 
     def time_off(self, provider_id: int) -> list[dict]:
         now = self.clock.now()
@@ -64,10 +106,8 @@ class Availability:
     # ------------------------------------------------------------------ the rule
     @staticmethod
     def _blocked_reason(slot: Slot, hours: dict[int, Day] | None, offs: list[tuple[datetime, datetime]]) -> str | None:
-        if hours is not None:
-            day = hours.get(slot.start.weekday())
-            if day is None or _minute(slot.start) < day.start_minute or _minute(slot.end) > day.end_minute:
-                return "hours"
+        if hours is not None and not _covered(hours, slot.start, slot.end):
+            return "hours"
         if any(start < slot.end and end > slot.start for start, end in offs):
             return "time_off"
         return None
@@ -230,9 +270,14 @@ def _parse_days(days: list[dict]) -> list[Day]:
         if not 0 <= weekday <= 6 or weekday in seen:
             raise ClinicError("Each weekday (0 = Monday ... 6 = Sunday) can appear once.")
         seen.add(weekday)
+        if d.get("shift") and d["shift"] != "custom":
+            if d["shift"] not in SHIFTS:
+                raise ClinicError(f"Shift must be one of {', '.join(SHIFTS)} or custom.")
+            d = {**d, "start": SHIFTS[d["shift"]][0], "end": SHIFTS[d["shift"]][1]}
         start, end = _parse_hhmm(d["start"]), _parse_hhmm(d["end"])
-        if end <= start:
-            raise ClinicError(f"On {WEEKDAYS[weekday]} the end time must be after the start time.")
+        if start >= DAY_MINUTES or start == end % DAY_MINUTES:
+            raise ClinicError(f"On {WEEKDAYS[weekday]} the start and end times must differ.")
+        # An end earlier than the start runs past midnight (a night shift); "24:00" means midnight.
         out.append(Day(weekday, start, end))
     if not out:
         raise ClinicError("Keep at least one working day. For a break, add time off instead.")
@@ -240,6 +285,8 @@ def _parse_days(days: list[dict]) -> list[Day]:
 
 
 def _parse_hhmm(value: str) -> int:
+    if value in ("24:00", "24:00:00"):
+        return DAY_MINUTES
     try:
         t = time.fromisoformat(value)
     except (TypeError, ValueError):
@@ -256,8 +303,13 @@ def _check_range(start: datetime, end: datetime) -> None:
 
 def _range_label(start: datetime, end: datetime) -> str:
     if start.date() == end.date():
-        return f"{start:%a %b} {start.day}, {start:%H:%M}-{end:%H:%M}"
+        return f"{start:%a %b} {start.day}, {_clock(start)} - {_clock(end)}"
     if start.time() == time.min and end.time() == time.min:
         last: date = (end - timedelta(days=1)).date()
         return f"{start:%a %b} {start.day}" + ("" if last == start.date() else f" - {last:%a %b} {last.day}")
-    return f"{start:%a %b} {start.day} {start:%H:%M} - {end:%a %b} {end.day} {end:%H:%M}"
+    return f"{start:%a %b} {start.day} {_clock(start)} - {end:%a %b} {end.day} {_clock(end)}"
+
+
+def _clock(dt: datetime) -> str:
+    """12-hour clock, like the rest of the app: 9:00 AM, 2:30 PM."""
+    return dt.strftime("%I:%M %p").lstrip("0")

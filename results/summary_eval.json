@@ -1,0 +1,32 @@
+{
+  "gateway": "https://nexusai-latest.onrender.com",
+  "now": "2026-10-14T11:00:00",
+  "results": {
+    "summaries": 30,
+    "kind": {
+      "ai": 30
+    },
+    "ai_errors": {},
+    "lines_kept": 130,
+    "lines_dropped": 1,
+    "dropped_by_reason": {
+      "made-up numbers": 1
+    },
+    "lines_per_ai_summary": 4.3,
+    "allergy_coverage": "8/8",
+    "tamper_test": "95/95",
+    "latency_ms": {
+      "mean": 2414,
+      "p95": 1946
+    },
+    "cost_usd_total": 0.027889,
+    "dropped_examples": [
+      {
+        "patient": 9,
+        "doctor": 4,
+        "text": "Upcoming visits are booked with you for Fri Oct 16, 2026 at 11:30 AM and Wed Oct 21, 2026 at 12:00 PM.",
+        "why": "numbers not in its sources: 2026"
+      }
+    ]
+  }
+}

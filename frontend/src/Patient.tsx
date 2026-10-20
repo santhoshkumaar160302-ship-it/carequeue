@@ -1,16 +1,18 @@
 import { FormEvent, useEffect, useState } from "react";
 import type { Shell } from "./App";
 import {
-  addDays, api, CANCEL_LABEL, dayLabel, longDay, MyWaitlist, Overview, parseLocal, Slot, STATUS_LABEL, Suggestion,
+  LOCALE, addDays, api, TIME_OF_DAY, timeOfDayText, CANCEL_LABEL, dayLabel, longDay, MyWaitlist, Overview, parseLocal, Slot, STATUS_LABEL, Suggestion,
   timeLabel, until, Visit, Week,
 } from "./api";
 import { Legend, WeekGrid, WeekNav } from "./Calendar";
+import { ChartView } from "./ChartView";
 import { Confirm, Countdown, Empty, useData } from "./common";
 
 export const PATIENT_TABS = [
   { id: "home", label: "Home" },
   { id: "book", label: "Book a visit" },
   { id: "history", label: "History" },
+  { id: "health", label: "My health" },
 ];
 
 export function PatientPortal({ shell }: { shell: Shell }) {
@@ -20,6 +22,13 @@ export function PatientPortal({ shell }: { shell: Shell }) {
       {shell.tab === "home" && <Home shell={shell} o={overview} />}
       {shell.tab === "book" && <Book shell={shell} o={overview} />}
       {shell.tab === "history" && <History shell={shell} />}
+      {shell.tab === "health" && (
+        <section className="card health">
+          <h1>My health</h1>
+          <p className="muted">Your chart at the clinic. Your doctors keep it up to date; tell them if anything is wrong.</p>
+          <ChartView shell={shell} />
+        </section>
+      )}
     </main>
   );
 }
@@ -79,7 +88,7 @@ function WaitlistCard({ shell, w }: { shell: Shell; w: MyWaitlist }) {
         <b>{w.position ? `#${w.position} in line` : "In line"} for {w.provider ?? w.specialty}</b>
         <span className="muted small">
           {w.replaces_appointment_id ? "Anything earlier than your current visit" : `${dayLabel(w.earliest)} to ${dayLabel(w.latest)}`}
-          {w.time_of_day !== "any" ? `, ${w.time_of_day}s` : ""}
+          {w.time_of_day !== "any" ? `, ${timeOfDayText(w.time_of_day)}` : ""}
         </span>
         {w.priority > 0 && <span className="tag prio">Priority: your doctor had to cancel</span>}
         {w.status === "offered" && <span className="tag held">Offer waiting for you</span>}
@@ -271,7 +280,7 @@ function JoinWaitlist({ shell, providerId, name, day, o }: { shell: Shell; provi
       <p className="muted">Join the waitlist and we'll hold the first time that opens with {name} up to {dayLabel(latest)}.</p>
       <label className="inline">Best time
         <select value={tod} onChange={(e) => setTod(e.target.value)}>
-          <option value="any">Any time</option><option value="morning">Mornings</option><option value="afternoon">Afternoons</option>
+          {TIME_OF_DAY.map((t) => <option key={t.value} value={t.value}>{t.label}{t.hours ? ` (${t.hours})` : ""}</option>)}
         </select>
       </label>
       <button className="ghost wide" onClick={() => shell.run(() => api.patient.joinWaitlist({
@@ -309,7 +318,7 @@ function FindTime({ shell, onPick }: { shell: Shell; onPick: (providerId: number
         <div className="found">
           <p className="muted small">
             Looking for {[u.provider ?? u.specialty, u.earliest && (u.earliest === u.latest ? dayLabel(u.earliest) : `${dayLabel(u.earliest)} to ${dayLabel(u.latest!)}`),
-              u.time_of_day !== "any" ? `${u.time_of_day}s` : null].filter(Boolean).join(", ")}
+              u.time_of_day !== "any" ? timeOfDayText(u.time_of_day) : null].filter(Boolean).join(", ")}
             {result.parser === "nexusai" ? ` (understood by ${result.gateway?.model ?? "NexusAI"})` : ""}
           </p>
           {result.options.length ? (
@@ -352,7 +361,7 @@ function History({ shell }: { shell: Shell }) {
         <ol className="timeline">
           {shown.map((v) => (
             <li key={v.id} className={v.status}>
-              <div className="when"><b>{parseLocal(v.start).toLocaleDateString([], { month: "short", day: "numeric" })}</b>
+              <div className="when"><b>{parseLocal(v.start).toLocaleDateString(LOCALE, { month: "short", day: "numeric" })}</b>
                 <span className="muted small">{parseLocal(v.start).getFullYear()}</span></div>
               <div className="what">
                 <p><b>{v.provider}</b> <span className="muted">{v.specialty}, {timeLabel(v.start)}</span>

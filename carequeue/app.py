@@ -17,22 +17,27 @@ from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
-from . import __version__
+from . import __version__, notecheck, summary
 from .assistant import Assistant
 from .auth import SESSION_DAYS, Auth, AuthError, Forbidden
 from .availability import Availability
 from .broker import make_broker
 from .cache import make_cache
+from .chart import Chart, check_vitals
 from .clinic import Clinic, ClinicError, NotFound
 from .clock import Clock
 from .config import Settings
 from .db import create_schema, make_engine, make_session_factory
+from .fhir import SEARCHABLE, Fhir
+from .llm import Gateway
+from .models import Appointment
 from .seed import seed_demo
 from .visits import Visits
 
 log = logging.getLogger("carequeue")
 FRONTEND_DIR = Path(__file__).resolve().parent / "static"
 COOKIE = "cq_session"
+FHIR_JSON = "application/fhir+json"
 
 
 @dataclass
@@ -41,12 +46,13 @@ class Services:
     clinic: Clinic
     assistant: Assistant
     engine: object
+    gateway: Gateway | None = None  # NexusAI, for the note check and summaries
 
 
 def build_services(settings: Settings | None = None, clock: Clock | None = None, cache=None, broker=None,
                    transport=None) -> Services:
     settings = settings or Settings.from_env()
-    clock = clock or Clock()
+    clock = clock or Clock(settings.clinic_timezone)
     engine = make_engine(settings.database_url)
     create_schema(engine)
     Session = make_session_factory(engine)
@@ -55,10 +61,12 @@ def build_services(settings: Settings | None = None, clock: Clock | None = None,
     if settings.seed_demo:
         with Session() as s:
             seed_demo(s, clock.now(), settings.horizon_days, open_hour=settings.clinic_open_hour,
-                      close_hour=settings.clinic_close_hour, slot_minutes=settings.slot_minutes)
+                      close_hour=settings.clinic_close_hour, slot_minutes=settings.slot_minutes,
+                      demo_password=settings.demo_password)
     assistant = Assistant(clinic, settings.nexusai_url, settings.nexusai_api_key, settings.nexusai_timeout_s,
                           transport=transport)
-    return Services(settings, clinic, assistant, engine)
+    gateway = Gateway(settings.nexusai_url, settings.nexusai_api_key, transport=transport)
+    return Services(settings, clinic, assistant, engine, gateway)
 
 
 def _background_loop(clinic: Clinic, stop: threading.Event, interval_s: float = 1.0) -> None:
@@ -74,6 +82,7 @@ def _background_loop(clinic: Clinic, stop: threading.Event, interval_s: float = 
 class LoginIn(BaseModel):
     email: str = Field(..., max_length=200)
     password: str = Field(..., max_length=200)
+    role: str | None = Field(None, pattern="^(patient|doctor)$")  # the tile picked on the sign-in page
 
 
 class RegisterIn(BaseModel):
@@ -81,6 +90,8 @@ class RegisterIn(BaseModel):
     email: str = Field(..., max_length=200)
     phone: str = Field("", max_length=30)
     password: str = Field(..., max_length=200)
+    birth_date: date | None = None
+    sex: str | None = Field(None, pattern="^(female|male|other|unknown)$")
 
 
 class DemoIn(BaseModel):
@@ -109,8 +120,44 @@ class AskIn(BaseModel):
     text: str = Field(..., max_length=500)
 
 
+class VitalsIn(BaseModel):
+    systolic: float | None = None
+    diastolic: float | None = None
+    heart_rate: float | None = None
+    temperature_c: float | None = None
+    weight_kg: float | None = None
+    height_cm: float | None = None
+
+
 class CloseIn(BaseModel):
     note: str | None = Field(None, max_length=2000)
+    vitals: VitalsIn | None = None
+
+
+class NoteCheckIn(BaseModel):
+    note: str = Field("", max_length=2000)
+    vitals: VitalsIn | None = None
+
+
+class AllergyIn(BaseModel):
+    substance: str = Field(..., max_length=200)
+    reaction: str = Field("", max_length=200)
+    criticality: str | None = None
+    category: str | None = None
+
+
+class StatusIn(BaseModel):
+    status: str
+
+
+class ConditionIn(BaseModel):
+    name: str = Field(..., max_length=200)
+    onset: date | None = None
+
+
+class MedicationIn(BaseModel):
+    name: str = Field(..., max_length=300)
+    dosage: str = Field("", max_length=200)
 
 
 class NoteIn(BaseModel):
@@ -122,6 +169,7 @@ class DayHours(BaseModel):
     working: bool = True
     start: str | None = None
     end: str | None = None
+    shift: str | None = None  # morning | day | evening | night | custom (custom uses start and end)
 
 
 class HoursIn(BaseModel):
@@ -143,6 +191,9 @@ def create_app(services: Services | None = None) -> FastAPI:
     clinic, settings = services.clinic, services.settings
     auth = Auth(clinic.Session, clinic.clock)
     availability, visits = Availability(clinic), Visits(clinic)
+    chart = Chart(clinic)
+    gateway = services.gateway or Gateway(settings.nexusai_url, settings.nexusai_api_key)
+    fhir = Fhir(chart, settings.clinic_timezone)
     stop = threading.Event()
 
     @asynccontextmanager
@@ -157,7 +208,12 @@ def create_app(services: Services | None = None) -> FastAPI:
     app = FastAPI(title="CareQueue", version=__version__, lifespan=lifespan)
 
     @app.exception_handler(ClinicError)
-    async def clinic_error(_req: Request, exc: ClinicError):
+    async def clinic_error(req: Request, exc: ClinicError):
+        if req.url.path.startswith("/fhir/"):  # FHIR clients expect an OperationOutcome
+            code = {401: "login", 403: "forbidden", 404: "not-found", 409: "conflict"}.get(exc.status, "invalid")
+            return JSONResponse({"resourceType": "OperationOutcome",
+                                 "issue": [{"severity": "error", "code": code, "diagnostics": str(exc)}]},
+                                status_code=exc.status, media_type=FHIR_JSON)
         return JSONResponse({"error": str(exc)}, status_code=exc.status)
 
     @app.exception_handler(ValueError)
@@ -205,11 +261,12 @@ def create_app(services: Services | None = None) -> FastAPI:
     @app.post("/api/auth/login")
     def login(body: LoginIn, request: Request):
         client = request.client.host if request.client else ""
-        return signed_in(request, auth.login(body.email, body.password, client))
+        return signed_in(request, auth.login(body.email, body.password, client, body.role))
 
     @app.post("/api/auth/register", status_code=201)
     def register(body: RegisterIn, request: Request):
-        return signed_in(request, auth.register(body.name, body.email, body.phone, body.password), 201)
+        return signed_in(request, auth.register(body.name, body.email, body.phone, body.password, body.birth_date,
+                                                body.sex), 201)
 
     @app.post("/api/auth/demo")
     def demo(body: DemoIn, request: Request):
@@ -236,6 +293,14 @@ def create_app(services: Services | None = None) -> FastAPI:
     @app.get("/api/me/history")
     def my_history(pid: int = Depends(patient)):
         return visits.history(pid)
+
+    @app.get("/api/me/chart")
+    def my_chart(user: dict = Depends(current_user), pid: int = Depends(patient)):
+        return chart.view(user, pid)
+
+    @app.get("/api/me/access-log")
+    def my_access_log(user: dict = Depends(current_user), pid: int = Depends(patient)):
+        return chart.access_log(user, pid)
 
     @app.get("/api/me/week")
     def my_week(provider_id: int, start: date, pid: int = Depends(patient)):
@@ -281,7 +346,10 @@ def create_app(services: Services | None = None) -> FastAPI:
     # ------------------------------------------------------------ doctor portal
     @app.get("/api/doctor/today")
     def doctor_today(prov: int = Depends(doctor)):
-        return visits.today(prov)
+        today = visits.today(prov)
+        if today["next"]:
+            today["next"]["chart"] = chart.brief(prov, today["next"]["patient_id"])
+        return today
 
     @app.get("/api/doctor/week")
     def doctor_week(start: date, prov: int = Depends(doctor)):
@@ -295,8 +363,76 @@ def create_app(services: Services | None = None) -> FastAPI:
         return story
 
     @app.post("/api/doctor/appointments/{appointment_id}/complete")
-    def doctor_complete(appointment_id: int, body: CloseIn, prov: int = Depends(doctor)):
-        return visits.close(prov, appointment_id, "completed", body.note)
+    def doctor_complete(appointment_id: int, body: CloseIn, user: dict = Depends(current_user),
+                        prov: int = Depends(doctor)):
+        readings = check_vitals(body.vitals.model_dump()) if body.vitals else {}  # check before closing
+        closed = visits.close(prov, appointment_id, "completed", body.note)
+        if readings:
+            closed["vitals"] = chart.record_vitals(user, appointment_id, readings)
+        return closed
+
+    @app.put("/api/doctor/appointments/{appointment_id}/vitals")
+    def doctor_vitals(appointment_id: int, body: VitalsIn, user: dict = Depends(current_user),
+                      _prov: int = Depends(doctor)):
+        return chart.record_vitals(user, appointment_id, body.model_dump())
+
+    # ------------------------------------------------------------ AI help for doctors (via NexusAI)
+    @app.post("/api/doctor/appointments/{appointment_id}/check-note")
+    def check_note(appointment_id: int, body: NoteCheckIn, user: dict = Depends(current_user),
+                   prov: int = Depends(doctor)):
+        entered = check_vitals(body.vitals.model_dump()) if body.vitals else {}
+        with clinic.Session() as s:
+            ctx = notecheck.context_for(s, prov, appointment_id, entered)
+            patient_id = s.get(Appointment, appointment_id).patient_id
+            chart._audit(s, user, "check_note", patient_id)
+            s.commit()
+        return notecheck.check(body.note, ctx, gateway, settings.nexusai_doctor_timeout_s)
+
+    @app.post("/api/doctor/patients/{patient_id}/summary")
+    def patient_summary(patient_id: int, user: dict = Depends(current_user), prov: int = Depends(doctor)):
+        with clinic.Session() as s:
+            chart._check(s, user, patient_id)
+            sources, open_items = summary.gather(s, prov, patient_id, clinic.clock.now())
+            chart._audit(s, user, "summary", patient_id)
+            s.commit()
+        return summary.summarize(sources, open_items, gateway, settings.nexusai_doctor_timeout_s)
+
+    # ------------------------------------------------------------ the patient chart
+    @app.get("/api/doctor/patients/{patient_id}/chart")
+    def doctor_chart(patient_id: int, user: dict = Depends(current_user), _prov: int = Depends(doctor)):
+        return chart.view(user, patient_id)
+
+    @app.get("/api/doctor/patients/{patient_id}/access-log")
+    def doctor_access_log(patient_id: int, user: dict = Depends(current_user), _prov: int = Depends(doctor)):
+        return chart.access_log(user, patient_id)
+
+    @app.post("/api/doctor/patients/{patient_id}/allergies", status_code=201)
+    def add_allergy(patient_id: int, body: AllergyIn, user: dict = Depends(current_user),
+                    _prov: int = Depends(doctor)):
+        return chart.add_allergy(user, patient_id, body.substance, body.reaction, body.criticality, body.category)
+
+    @app.post("/api/doctor/allergies/{allergy_id}/status")
+    def allergy_status(allergy_id: int, body: StatusIn, user: dict = Depends(current_user),
+                       _prov: int = Depends(doctor)):
+        return chart.set_allergy_status(user, allergy_id, body.status)
+
+    @app.post("/api/doctor/patients/{patient_id}/conditions", status_code=201)
+    def add_condition(patient_id: int, body: ConditionIn, user: dict = Depends(current_user),
+                      _prov: int = Depends(doctor)):
+        return chart.add_condition(user, patient_id, body.name, body.onset)
+
+    @app.post("/api/doctor/conditions/{condition_id}/resolve")
+    def resolve_condition(condition_id: int, user: dict = Depends(current_user), _prov: int = Depends(doctor)):
+        return chart.resolve_condition(user, condition_id)
+
+    @app.post("/api/doctor/patients/{patient_id}/medications", status_code=201)
+    def add_medication(patient_id: int, body: MedicationIn, user: dict = Depends(current_user),
+                       _prov: int = Depends(doctor)):
+        return chart.add_medication(user, patient_id, body.name, body.dosage)
+
+    @app.post("/api/doctor/medications/{medication_id}/stop")
+    def stop_medication(medication_id: int, user: dict = Depends(current_user), _prov: int = Depends(doctor)):
+        return chart.stop_medication(user, medication_id)
 
     @app.post("/api/doctor/appointments/{appointment_id}/no-show")
     def doctor_no_show(appointment_id: int, prov: int = Depends(doctor)):
@@ -314,6 +450,10 @@ def create_app(services: Services | None = None) -> FastAPI:
     @app.get("/api/doctor/hours")
     def get_hours(prov: int = Depends(doctor)):
         return availability.hours(prov)
+
+    @app.get("/api/doctor/shifts")
+    def get_shifts(prov: int = Depends(doctor)):
+        return availability.shifts()
 
     @app.post("/api/doctor/hours/preview")
     def preview_hours(body: HoursIn, prov: int = Depends(doctor)):
@@ -340,8 +480,8 @@ def create_app(services: Services | None = None) -> FastAPI:
         return availability.remove_time_off(prov, time_off_id)
 
     @app.get("/api/doctor/patients")
-    def doctor_patients(q: str = "", prov: int = Depends(doctor)):
-        return visits.doctor_patients(prov, q)
+    def doctor_patients(q: str = "", group: str = "all", prov: int = Depends(doctor)):
+        return visits.doctor_patients(prov, q, group)
 
     @app.get("/api/doctor/patients/{patient_id}")
     def doctor_patient(patient_id: int, prov: int = Depends(doctor)):
@@ -360,12 +500,45 @@ def create_app(services: Services | None = None) -> FastAPI:
     def doctor_metrics(_prov: int = Depends(doctor)):
         return clinic.metrics()
 
+    # ------------------------------------------------------------ FHIR (read-only)
+    def fhir_base(request: Request) -> str:
+        return str(request.base_url).rstrip("/") + "/fhir"
+
+    def fhir_json(body: dict) -> JSONResponse:
+        return JSONResponse(body, media_type=FHIR_JSON)
+
+    def patient_param(value: str) -> int:
+        try:
+            return int(value.removeprefix("Patient/"))
+        except ValueError:
+            raise NotFound(f"patient {value} not found") from None
+
+    @app.get("/fhir/metadata", include_in_schema=False)
+    def fhir_metadata(request: Request):
+        return fhir_json(Fhir.capability(fhir_base(request)))
+
+    @app.get("/fhir/Patient/{patient_id}/$everything", include_in_schema=False)
+    def fhir_everything(patient_id: int, request: Request, user: dict = Depends(current_user)):
+        return fhir_json(fhir.everything(user, patient_id, fhir_base(request)))
+
+    @app.get("/fhir/Patient/{patient_id}", include_in_schema=False)
+    def fhir_patient(patient_id: int, user: dict = Depends(current_user)):
+        return fhir_json(fhir.patient(user, patient_id))
+
+    @app.get("/fhir/{resource_type}", include_in_schema=False)
+    def fhir_search(resource_type: str, request: Request, patient: str = "", user: dict = Depends(current_user)):
+        if resource_type not in SEARCHABLE:
+            raise NotFound(f"{resource_type} isn't supported; see /fhir/metadata")
+        if not patient:
+            raise ClinicError("Search by patient, for example ?patient=11")
+        return fhir_json(fhir.search(user, resource_type, patient_param(patient), fhir_base(request)))
+
     if FRONTEND_DIR.is_dir():
         app.mount("/assets", StaticFiles(directory=FRONTEND_DIR / "assets"), name="assets")
 
         @app.get("/{path:path}", include_in_schema=False)
         def spa(path: str):
-            if path.startswith("api/"):
+            if path.startswith(("api/", "fhir/")):
                 raise HTTPException(404)
             target = FRONTEND_DIR / path
             if path and target.is_file() and FRONTEND_DIR in target.resolve().parents:

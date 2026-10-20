@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { addDays, parseLocal, Slot, timeLabel, Week } from "./api";
+import { LOCALE, addDays, parseLocal, Slot, timeLabel, Week } from "./api";
 
 const ROW = 46; // px per half-hour row, including the gap
 
@@ -31,7 +31,11 @@ export function WeekGrid({ week, today, now, selected, onSelect, look, trim }: P
   let first = 0;
   let last = allTimes.length - 1;
   if (trim) {
-    const off = (i: number) => week.days.every((d) => !d.slots[i] || ["unavailable", "blocked"].includes(d.slots[i].state));
+    // Outside everyone's hours on every day shown. Time off stays visible, so the doctor sees it.
+    const off = (i: number) => week.days.every((d) => {
+      const s = d.slots[i];
+      return !s || s.state === "unavailable" || (s.state === "blocked" && s.blocked_reason !== "time_off");
+    });
     while (first < last && off(first)) first++;
     while (last > first && off(last)) last--;
   }
@@ -45,7 +49,7 @@ export function WeekGrid({ week, today, now, selected, onSelect, look, trim }: P
       <div className="mobile-days" role="tablist" aria-label="Day">
         {week.days.map((d, i) => (
           <button key={d.date} role="tab" aria-selected={i === mobileDay} className={i === mobileDay ? "on" : ""} onClick={() => setMobileDay(i)}>
-            {parseLocal(d.date).toLocaleDateString([], { weekday: "short" })} <b>{parseLocal(d.date).getDate()}</b>
+            {parseLocal(d.date).toLocaleDateString(LOCALE, { weekday: "short" })} <b>{parseLocal(d.date).getDate()}</b>
           </button>
         ))}
       </div>
@@ -61,7 +65,7 @@ export function WeekGrid({ week, today, now, selected, onSelect, look, trim }: P
           return (
             <div key={day.date} className={`col day ${i === mobileDay ? "m-on" : ""}`}>
               <div className={`day-head ${isToday ? "today" : ""}`}>
-                <span>{parseLocal(day.date).toLocaleDateString([], { weekday: "short" })}</span>
+                <span>{parseLocal(day.date).toLocaleDateString(LOCALE, { weekday: "short" })}</span>
                 <b>{parseLocal(day.date).getDate()}</b>
               </div>
               <div className="cells">
@@ -71,7 +75,7 @@ export function WeekGrid({ week, today, now, selected, onSelect, look, trim }: P
                   const sel = selected === slot.id;
                   return (
                     <button key={slot.id} className={`cell ${kind} ${sel ? "sel" : ""}`} aria-pressed={sel}
-                      aria-label={`${parseLocal(day.date).toLocaleDateString([], { weekday: "long" })} ${timeLabel(slot.start)}, ${label ?? (text || kind)}`}
+                      aria-label={`${parseLocal(day.date).toLocaleDateString(LOCALE, { weekday: "long" })} ${timeLabel(slot.start)}, ${label ?? (text || kind)}`}
                       onClick={() => onSelect(sel ? null : slot.id)}>
                       <span>{text}</span>
                     </button>
@@ -87,7 +91,7 @@ export function WeekGrid({ week, today, now, selected, onSelect, look, trim }: P
 }
 
 export function WeekNav({ start, today, onChange }: { start: string; today: string; onChange: (iso: string) => void }) {
-  const fmt = (iso: string) => parseLocal(iso).toLocaleDateString([], { month: "short", day: "numeric" });
+  const fmt = (iso: string) => parseLocal(iso).toLocaleDateString(LOCALE, { month: "short", day: "numeric" });
   return (
     <div className="weeknav">
       <button className="icon-btn" aria-label="Previous week" onClick={() => onChange(addDays(start, -7))}>‹</button>

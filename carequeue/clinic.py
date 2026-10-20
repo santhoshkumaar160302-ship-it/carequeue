@@ -38,7 +38,9 @@ from .models import (
 )
 
 log = logging.getLogger("carequeue.clinic")
-TIMES_OF_DAY = ("any", "morning", "afternoon")
+TIMES_OF_DAY = ("any", "morning", "afternoon", "evening", "night")
+# Start hour (inclusive) and end hour (exclusive) of each part of the day. Night runs past midnight.
+TIME_OF_DAY_HOURS = {"morning": (6, 12), "afternoon": (12, 18), "evening": (18, 22), "night": (22, 6)}
 
 
 class ClinicError(Exception):
@@ -54,11 +56,13 @@ class Conflict(ClinicError):
 
 
 def matches_time_of_day(start: datetime, time_of_day: str) -> bool:
-    if time_of_day == "morning":
-        return start.hour < 12
-    if time_of_day == "afternoon":
-        return start.hour >= 12
-    return True
+    """Does a visit starting at `start` fall in the part of the day the patient asked for?
+    The clinic runs around the clock, so each part is a fixed window: nobody asking for a morning
+    visit wants 1 AM. "night" (10 PM - 6 AM) wraps past midnight."""
+    if time_of_day not in TIME_OF_DAY_HOURS:
+        return True
+    lo, hi = TIME_OF_DAY_HOURS[time_of_day]
+    return lo <= start.hour < hi if lo < hi else start.hour >= lo or start.hour < hi
 
 
 def fmt_when(dt: datetime) -> str:

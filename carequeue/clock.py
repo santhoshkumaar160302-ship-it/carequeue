@@ -6,11 +6,18 @@ Times are naive datetimes in the clinic's local time zone: a slot at 09:00 means
 from __future__ import annotations
 
 from datetime import datetime, timedelta
+from zoneinfo import ZoneInfo
 
 
 class Clock:
+    """The clinic's wall clock. Servers often run on UTC (Render does), so "now" is read in the
+    clinic's own time zone, not the server's; otherwise "today" would flip hours early."""
+
+    def __init__(self, timezone: str | None = None):
+        self.zone = ZoneInfo(timezone) if timezone else None
+
     def now(self) -> datetime:
-        return datetime.now().replace(microsecond=0)
+        return datetime.now(self.zone).replace(tzinfo=None, microsecond=0)
 
 
 class FakeClock(Clock):

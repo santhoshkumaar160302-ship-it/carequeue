@@ -187,7 +187,7 @@ def test_waitlist_validation(clinic):
     with pytest.raises(ClinicError, match="on or after"):
         clinic.join_waitlist(PATIENTS["Ava"], TUE, date(2026, 10, 12), provider_id=1)
     with pytest.raises(ClinicError, match="time_of_day"):
-        clinic.join_waitlist(PATIENTS["Ava"], TUE, TUE, provider_id=1, time_of_day="evening")
+        clinic.join_waitlist(PATIENTS["Ava"], TUE, TUE, provider_id=1, time_of_day="lunchtime")
     entry = clinic.join_waitlist(PATIENTS["Noah"], date(2026, 10, 16), date(2026, 10, 16), provider_id=2)
     clinic.leave_waitlist(entry["id"])
     with pytest.raises(Conflict):

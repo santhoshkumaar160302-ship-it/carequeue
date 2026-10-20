@@ -137,7 +137,7 @@ export default function App() {
       </header>
 
       {user === undefined && <div className="fatal muted">Opening the clinic…</div>}
-      {user === null && <Login health={health} onSignedIn={(u) => { setUser(u); refresh(); window.location.hash = "#/"; }} />}
+      {user === null && <Login onSignedIn={(u) => { setUser(u); refresh(); window.location.hash = "#/"; }} />}
       {shell && (shell.user.role === "doctor" ? <DoctorPortal shell={shell} /> : <PatientPortal shell={shell} />)}
 
       {toast && <div key={toast.id} className={`toast ${toast.kind}`} role="status">{toast.text}</div>}

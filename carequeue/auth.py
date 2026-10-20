@@ -5,6 +5,8 @@
   SHA-256 hash, so a leaked database doesn't hand out live sessions.
 - Each user is a patient or a doctor. The API checks the role on every request and always
   uses the signed-in user's own patient or doctor id, never one sent by the browser.
+- Patients create their own accounts. Doctor accounts are created by the clinic's management,
+  never through the website.
 """
 from __future__ import annotations
 
@@ -14,7 +16,7 @@ import re
 import secrets
 import threading
 from collections import defaultdict, deque
-from datetime import datetime, timedelta
+from datetime import date, datetime, timedelta
 
 from sqlalchemy import delete, func, select
 from sqlalchemy.exc import IntegrityError
@@ -28,6 +30,8 @@ SCRYPT_N, SCRYPT_R, SCRYPT_P = 2**14, 8, 1
 EMAIL_RE = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
 DEMO_PATIENT = "harper.lopez@demo.carequeue"
 DEMO_DOCTOR = "maya.patel@demo.carequeue"
+SAMPLE_DOMAIN = "@demo.carequeue"
+SEXES = ("female", "male", "other", "unknown")  # FHIR's administrative gender codes
 
 
 class AuthError(ClinicError):
@@ -97,7 +101,10 @@ class Auth:
         s.commit()
         return token
 
-    def login(self, email: str, password: str, client: str = "") -> str:
+    def login(self, email: str, password: str, client: str = "", role: str | None = None) -> str:
+        """Sign in. `role` is the tile the person picked ("I'm a patient" / "I'm a doctor"); a right
+        password on the wrong tile gets a clear hint instead of a session (only after the password checks
+        out, so it reveals nothing to someone guessing)."""
         email = email.strip().lower()
         key = f"{email}|{client}"
         self._check_throttle(key)
@@ -107,6 +114,9 @@ class Auth:
             if not ok:
                 self._record_failure(key)
                 raise AuthError("That email and password don't match.")
+            if role and user.role != role:
+                other = "I'm a doctor" if user.role == "doctor" else "I'm a patient"
+                raise AuthError(f"This is a {user.role} account. Choose \u201c{other}\u201d to sign in.")
             return self._start_session(s, user)
 
     def demo_login(self, role: str) -> str:
@@ -119,9 +129,17 @@ class Auth:
                 raise ClinicError("The demo accounts aren't set up on this server.")
             return self._start_session(s, user)
 
-    def register(self, name: str, email: str, phone: str, password: str) -> str:
-        """Create a patient account. Doctor accounts are created by the clinic, not self-service."""
+    def register(self, name: str, email: str, phone: str, password: str, birth_date: date | None = None,
+                 sex: str | None = None) -> str:
+        """Create a patient account. Doctor accounts are created by the clinic's management, not here."""
         name, email, phone = name.strip(), email.strip().lower(), phone.strip()
+        today = self.clock.now().date()
+        if birth_date is not None and not (today.replace(year=today.year - 120) <= birth_date <= today):
+            raise ClinicError("Please check your date of birth.")
+        if sex is not None and sex not in SEXES:
+            raise ClinicError(f"Sex must be one of {', '.join(SEXES)}.")
+        if email.endswith(SAMPLE_DOMAIN):
+            raise ClinicError("Please use your own email address.")
         if not 2 <= len(name) <= 100:
             raise ClinicError("Please enter your full name.")
         if not EMAIL_RE.match(email) or len(email) > 200:
@@ -134,7 +152,7 @@ class Auth:
         with self.Session() as s:
             if s.scalar(select(func.count(User.id)).where(User.email == email)):
                 raise ClinicError("An account with that email already exists. Try signing in.")
-            patient = Patient(name=name, phone=phone[:30] or "-", featured=False)
+            patient = Patient(name=name, phone=phone[:30] or "-", featured=False, birth_date=birth_date, sex=sex)
             s.add(patient)
             s.flush()
             user = User(email=email, password_hash=hash_password(password), role="patient",
@@ -174,12 +192,20 @@ class Auth:
 
 
 def seed_users(session, now: datetime, password: str | None = None) -> None:
-    """Accounts for the demo: every doctor, and every featured patient.
+    """Sample accounts: every doctor (standing in for accounts management would create), and every
+    featured patient, at <first>.<last>@demo.carequeue.
 
-    Their password is random, so the only way in to a fresh demo is the one-click demo
-    buttons (switched off with CQ_DEMO_LOGINS=0). New patients can register themselves.
+    They share one password, CQ_DEMO_PASSWORD, kept out of the code. When it's set, it's applied on
+    every start, so changing it on the server takes effect without a fresh database. When it isn't,
+    the password is random and nobody can sign in to them.
     """
     if session.scalar(select(func.count(User.id))):
+        if password:
+            secret = hash_password(password)
+            for user in session.scalars(select(User).where(User.email.like(f"%{SAMPLE_DOMAIN}"))):
+                if not verify_password(password, user.password_hash):
+                    user.password_hash = secret
+            session.commit()
         return
     secret = hash_password(password or secrets.token_urlsafe(18))
 

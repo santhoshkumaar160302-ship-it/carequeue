@@ -1,11 +1,13 @@
 import { FormEvent, useEffect, useState } from "react";
 import type { Shell } from "./App";
 import {
-  ActivityEvent, Affected, api, CANCEL_LABEL, ChangeResult, dayLabel, DoctorPatient, HoursDay, HoursInput, longDay,
-  parseLocal, PatientRecord, Preview, Slot, SlotStory, StatusLabelKey, STATUS_LABEL, StoryEvent, timeLabel, TimeOff,
-  TimeOffInput, Today, until, Visit, WaitlistRow, Week,
+  LOCALE, ActivityEvent, Affected, api, ChartBrief, NoteCheck, VitalsInput, CANCEL_LABEL, ChangeResult, dayLabel, DoctorPatient, HoursDay, HoursInput, longDay,
+  parseLocal, PatientRecord, Preview, Shift, ShiftName, Slot, SlotStory, StatusLabelKey, STATUS_LABEL, StoryEvent, timeLabel, TimeOff,
+  TimeOffInput, timeOfDayText, Today, until, Visit, WaitlistRow, Week,
 } from "./api";
 import { Legend, WeekGrid, WeekNav } from "./Calendar";
+import { NoteChecker, NoteFindings, SummaryCard } from "./AiHelp";
+import { ChartView } from "./ChartView";
 import { Confirm, Empty, Feed, useData } from "./common";
 
 export const DOCTOR_TABS = [
@@ -30,9 +32,20 @@ const greeting = (d: Date) => (d.getHours() < 12 ? "Good morning" : d.getHours()
 const surname = (name: string) => name.replace("Dr. ", "").split(" ").slice(-1)[0];
 
 /** Mark a visit that has started as seen (with an optional note) or as a no-show. */
+const VITAL_FIELDS: { key: keyof VitalsInput; label: string; unit: string; step: string }[] = [
+  { key: "systolic", label: "BP systolic", unit: "mmHg", step: "1" },
+  { key: "diastolic", label: "BP diastolic", unit: "mmHg", step: "1" },
+  { key: "heart_rate", label: "Heart rate", unit: "/min", step: "1" },
+  { key: "temperature_c", label: "Temp", unit: "°C", step: "0.1" },
+  { key: "weight_kg", label: "Weight", unit: "kg", step: "0.1" },
+];
+
 function CloseVisit({ shell, visit, compact }: { shell: Shell; visit: Visit; compact?: boolean }) {
   const [note, setNote] = useState("");
+  const [vitals, setVitals] = useState<Record<string, string>>({});
+  const [checked, setChecked] = useState<NoteCheck | null>(null);
   const [open, setOpen] = useState(!compact);
+  const entered = () => Object.fromEntries(Object.entries(vitals).filter(([, v]) => v !== "").map(([k, v]) => [k, Number(v)]));
   if (!open) {
     return (
       <div className="row">
@@ -46,19 +59,70 @@ function CloseVisit({ shell, visit, compact }: { shell: Shell; visit: Visit; com
   return (
     <form className="close-visit" onSubmit={(e) => {
       e.preventDefault();
-      shell.run(() => api.doctor.complete(visit.id, note), `Saved ${visit.patient}'s visit.`);
+      const given = entered();
+      shell.run(() => api.doctor.complete(visit.id, note, Object.keys(given).length ? given : undefined),
+        `Saved ${visit.patient}'s visit.`);
     }}>
+      <fieldset className="vitals-in">
+        <legend className="muted small">Vital signs (optional)</legend>
+        {VITAL_FIELDS.map((f) => (
+          <label key={f.key}>
+            <span>{f.label}</span>
+            <span className="unit-in">
+              <input type="number" inputMode="decimal" step={f.step} value={vitals[f.key] ?? ""}
+                onChange={(e) => setVitals({ ...vitals, [f.key]: e.target.value })} />
+              <span className="muted small">{f.unit}</span>
+            </span>
+          </label>
+        ))}
+      </fieldset>
       <label className="sr-only" htmlFor={`note-${visit.id}`}>Visit note</label>
-      <textarea id={`note-${visit.id}`} value={note} onChange={(e) => setNote(e.target.value)} maxLength={2000} rows={3}
-        placeholder="Visit note (the patient can read it)" />
+      <textarea id={`note-${visit.id}`} value={note} onChange={(e) => { setNote(e.target.value); setChecked(null); }}
+        maxLength={2000} rows={3} placeholder="Visit note (the patient can read it)" />
+      {checked && <NoteFindings result={checked} />}
       <div className="row">
         <button className="primary small-btn">Save as seen</button>
+        <NoteChecker shell={shell} appointmentId={visit.id} note={note} vitals={entered()} onResult={setChecked} />
         <button type="button" className="ghost small-btn" onClick={() => shell.run(() => api.doctor.noShow(visit.id), `${visit.patient} marked as not coming.`)}>
           Didn't come
         </button>
         {compact && <button type="button" className="link" onClick={() => setOpen(false)}>Not now</button>}
       </div>
     </form>
+  );
+}
+
+/** "12 HR Hydrocodone Bitartrate 10 MG Extended Release Oral Capsule" -> "Hydrocodone Bitartrate". */
+function drugName(full: string): string {
+  const words = full.replace(/[{}()[\],]/g, " ").split(/\s+/).filter(Boolean);
+  const start = words.findIndex((w) => /^[a-z][a-z-]{3,}$/i.test(w) && !/^(actuat|nda\d*|ml|mg|hr|unt|pack)$/i.test(w));
+  if (start < 0) return full.slice(0, 24);
+  const name = [];
+  for (const w of words.slice(start)) {
+    if (/\d/.test(w) || /^(mg|ml|oral|tablet|capsule|solution|injectable|inhaler|extended|release)$/i.test(w)) break;
+    name.push(w);
+  }
+  return name.slice(0, 2).join(" ");
+}
+
+function ChartBriefView({ brief }: { brief: ChartBrief }) {
+  return (
+    <div className="brief">
+      <p>
+        <span className="brief-label">Allergies</span>
+        {brief.allergies.length ? brief.allergies.map((a) => <span key={a} className="tag risk">{a}</span>)
+          : <span className="muted">None recorded</span>}
+      </p>
+      {brief.conditions.length > 0 && (
+        <p><span className="brief-label">Conditions</span>{brief.conditions.slice(0, 4).join(", ")}
+          {brief.conditions.length > 4 && <span className="muted small">and {brief.conditions.length - 4} more</span>}</p>
+      )}
+      {brief.medications.length > 0 && (
+        <p><span className="brief-label">Medications</span>{brief.medications.length} active
+          <span className="muted small"> ({brief.medications.slice(0, 2).map(drugName).join(", ")}
+            {brief.medications.length > 2 ? ", …" : ""})</span></p>
+      )}
+    </div>
   );
 }
 
@@ -91,6 +155,8 @@ function TodayView({ shell }: { shell: Shell }) {
             <p className="kicker">{n.now ? "With you now" : `Next patient, ${until(n.start, now)}`}</p>
             <h2>{n.patient}</h2>
             <p className="hero-who"><b>{dayLabel(n.start)}, {timeLabel(n.start)}</b> <span className="muted">{n.phone}</span></p>
+            {n.chart && <ChartBriefView brief={n.chart} />}
+            <SummaryCard key={n.patient_id} shell={shell} patientId={n.patient_id!} compact />
             {n.last_visit ? (
               <div className="last">
                 <p className="muted small">Last visit with you, {dayLabel(n.last_visit.start)}</p>
@@ -104,6 +170,24 @@ function TodayView({ shell }: { shell: Shell }) {
           </section>
         ) : (
           <section className="hero card"><p className="kicker">Next patient</p><h2>Nobody else is booked.</h2></section>
+        )}
+
+        {today.earlier.length > 0 && (
+          <section className="card">
+            <h3>Still to write up from earlier</h3>
+            <ul className="day-list">
+              {today.earlier.map((v) => (
+                <li key={v.id} className="booked">
+                  <span className="t">{dayLabel(v.start)}<br />{timeLabel(v.start)}</span>
+                  <div className="who-col">
+                    <button className="link name" onClick={() => shell.go("patients", v.patient_id!)}>{v.patient}</button>
+                    <CloseVisit shell={shell} visit={v} compact />
+                  </div>
+                  <span className="tag st-booked">To write up</span>
+                </li>
+              ))}
+            </ul>
+          </section>
         )}
 
         <section className="card">
@@ -136,7 +220,7 @@ function TodayView({ shell }: { shell: Shell }) {
                 <li key={w.id}>
                   <span className="n">{i + 1}</span>
                   <span><b>{w.patient}</b><span className="muted small">
-                    {dayLabel(w.earliest)} to {dayLabel(w.latest)}{w.time_of_day !== "any" ? `, ${w.time_of_day}s` : ""}
+                    {dayLabel(w.earliest)} to {dayLabel(w.latest)}{w.time_of_day !== "any" ? `, ${timeOfDayText(w.time_of_day)}` : ""}
                   </span></span>
                   {w.status === "offered" ? <span className="tag held">offer out</span> : w.priority > 0 ? <span className="tag prio">rebooking</span> : <span />}
                 </li>
@@ -184,7 +268,7 @@ function CalendarView({ shell }: { shell: Shell }) {
           ["missed", "Didn't come"], ["timeoff", "Time off"], ["off", "Outside your hours"]]} />
         {error ? <div className="cal-empty">Couldn't load your week: {error}</div>
           : !week ? <div className="cal-empty muted">Loading…</div>
-            : <WeekGrid week={week} today={shell.today} now={shell.now()} selected={selected} onSelect={setSelected} look={look} />}
+            : <WeekGrid week={week} today={shell.today} now={shell.now()} selected={selected} onSelect={setSelected} look={look} trim />}
       </section>
       <aside className="card side" aria-live="polite">
         {selected ? <DoctorSlot shell={shell} slotId={selected} close={() => setSelected(null)} />
@@ -276,8 +360,9 @@ function DoctorSlot({ shell, slotId, close }: { shell: Shell; slotId: number; cl
 }
 
 // ============================================================ availability
-const TIMES = Array.from({ length: 21 }, (_, i) => `${String(8 + Math.floor(i / 2)).padStart(2, "0")}:${i % 2 ? "30" : "00"}`);
-const hhmmLabel = (t: string) => timeLabel(`2000-01-01T${t}`);
+// Every half hour of the day, 00:00 to 24:00 (midnight at the end of the day).
+const TIMES = Array.from({ length: 49 }, (_, i) => `${String(Math.floor(i / 2)).padStart(2, "0")}:${i % 2 ? "30" : "00"}`);
+const hhmmLabel = (t: string) => (t === "24:00" ? "12:00 AM" : timeLabel(`2000-01-01T${t}`));
 
 function AffectedList({ preview, verb }: { preview: Preview; verb: string }) {
   return (
@@ -309,17 +394,32 @@ function AvailabilityView({ shell }: { shell: Shell }) {
   );
 }
 
+function toInput(d: HoursDay): HoursInput {
+  return { weekday: d.weekday, working: d.working, shift: d.shift ?? "day", start: d.start ?? "09:00", end: d.end ?? "17:00" };
+}
+
+/** "6 AM – 2 PM", with "(next day)" when the shift runs past midnight. */
+function rangeLabel(start: string, end: string) {
+  const overnight = end !== "24:00" && end <= start;
+  return `${hhmmLabel(start)} – ${hhmmLabel(end)}${overnight ? " (next day)" : ""}`;
+}
+
 function WeeklyHours({ shell }: { shell: Shell }) {
   const [saved] = useData<HoursDay[]>(() => api.doctor.hours(), []);
+  const [shifts] = useData<Shift[]>(() => api.doctor.shifts(), []);
   const [days, setDays] = useState<HoursInput[] | null>(null);
   const [preview, setPreview] = useState<Preview | null>(null);
   const [busy, setBusy] = useState(false);
   useEffect(() => {
-    if (saved) setDays(saved.map((d) => ({ weekday: d.weekday, working: d.working, start: d.start ?? "09:00", end: d.end ?? "17:00" })));
+    if (saved) setDays(saved.map(toInput));
   }, [saved]);
-  if (!saved || !days) return <section className="card"><p className="muted">Loading…</p></section>;
-  const dirty = JSON.stringify(days) !== JSON.stringify(saved.map((d) => ({ weekday: d.weekday, working: d.working, start: d.start ?? "09:00", end: d.end ?? "17:00" })));
+  if (!saved || !days || !shifts) return <section className="card"><p className="muted">Loading…</p></section>;
+  const dirty = JSON.stringify(days) !== JSON.stringify(saved.map(toInput));
   const set = (i: number, patch: Partial<HoursInput>) => setDays(days.map((d, j) => (j === i ? { ...d, ...patch } : d)));
+  const pickShift = (i: number, name: ShiftName) => {
+    const preset = shifts.find((s) => s.name === name);
+    set(i, preset ? { shift: name, start: preset.start, end: preset.end } : { shift: "custom" });
+  };
 
   async function review() {
     setBusy(true);
@@ -332,13 +432,17 @@ function WeeklyHours({ shell }: { shell: Shell }) {
     const r = await shell.run(() => api.doctor.setHours(days!), resultMessage);
     setBusy(false);
     setPreview(null);
-    if (r) setDays(r.hours.map((d) => ({ weekday: d.weekday, working: d.working, start: d.start ?? "09:00", end: d.end ?? "17:00" })));
+    if (r) setDays(r.hours.map(toInput));
   }
 
   return (
     <section className="card">
       <h2 className="h2-small">Weekly hours</h2>
-      <p className="muted">Patients can book you inside these hours. Times run from 8 AM to 6 PM in 30-minute visits.</p>
+      <p className="muted">Pick a shift for each day you work, or set your own hours. The clinic runs around the clock
+        in 30-minute visits; patients can book you only inside your hours.</p>
+      <div className="shift-key">
+        {shifts.map((s) => <span key={s.name}><b>{s.label}</b> {rangeLabel(s.start, s.end)}</span>)}
+      </div>
       <div className="hours">
         {days.map((d, i) => (
           <div key={d.weekday} className={`hours-row ${d.working ? "" : "off"}`}>
@@ -348,13 +452,22 @@ function WeeklyHours({ shell }: { shell: Shell }) {
             </label>
             {d.working ? (
               <span className="range">
-                <select aria-label={`${saved[i].name} start`} value={d.start ?? "09:00"} onChange={(e) => set(i, { start: e.target.value })}>
-                  {TIMES.slice(0, -1).map((t) => <option key={t} value={t}>{hhmmLabel(t)}</option>)}
+                <select aria-label={`${saved[i].name} shift`} value={d.shift} onChange={(e) => pickShift(i, e.target.value as ShiftName)}>
+                  {shifts.map((s) => <option key={s.name} value={s.name}>{s.label}</option>)}
+                  <option value="custom">Custom hours</option>
                 </select>
-                <span className="muted">to</span>
-                <select aria-label={`${saved[i].name} end`} value={d.end ?? "17:00"} onChange={(e) => set(i, { end: e.target.value })}>
-                  {TIMES.slice(1).map((t) => <option key={t} value={t}>{hhmmLabel(t)}</option>)}
-                </select>
+                {d.shift === "custom" ? (
+                  <>
+                    <select aria-label={`${saved[i].name} start`} value={d.start ?? "09:00"} onChange={(e) => set(i, { start: e.target.value })}>
+                      {TIMES.slice(0, -1).map((t) => <option key={t} value={t}>{hhmmLabel(t)}</option>)}
+                    </select>
+                    <span className="muted">to</span>
+                    <select aria-label={`${saved[i].name} end`} value={d.end ?? "17:00"} onChange={(e) => set(i, { end: e.target.value })}>
+                      {TIMES.slice(1).map((t) => <option key={t} value={t}>{t === "24:00" ? "Midnight" : hhmmLabel(t)}</option>)}
+                    </select>
+                    {d.end !== "24:00" && (d.end ?? "") <= (d.start ?? "") && <span className="muted small">ends next day</span>}
+                  </>
+                ) : <span className="muted">{rangeLabel(d.start ?? "", d.end ?? "")}</span>}
               </span>
             ) : <span className="muted">Not working</span>}
           </div>
@@ -362,7 +475,7 @@ function WeeklyHours({ shell }: { shell: Shell }) {
       </div>
       <div className="row">
         <button className="primary" disabled={!dirty || busy} onClick={review}>Save hours</button>
-        {dirty && <button className="link" onClick={() => setDays(saved.map((d) => ({ weekday: d.weekday, working: d.working, start: d.start ?? "09:00", end: d.end ?? "17:00" })))}>Undo changes</button>}
+        {dirty && <button className="link" onClick={() => setDays(saved.map(toInput))}>Undo changes</button>}
       </div>
       {preview && (
         <Confirm title="Save your new hours?" confirm={preview.affected.length ? "Save and rebook them" : "Save"} danger={preview.affected.length > 0}
@@ -452,26 +565,59 @@ function TimeOffCard({ shell }: { shell: Shell }) {
 }
 
 // ============================================================ patients
+type Filter = "all" | "mine" | "new";
+const FILTERS: { id: Filter; label: string; hint: string }[] = [
+  { id: "all", label: "All", hint: "Everyone you've seen, are booked with, or have waiting" },
+  { id: "mine", label: "My patients", hint: "Patients you've already seen at least once" },
+  { id: "new", label: "New", hint: "Booked with you or on your waitlist, but not seen by you yet" },
+];
+
+function patientLine(p: DoctorPatient): string {
+  if (p.group === "mine") {
+    const seen = `${p.visits} visit${p.visits === 1 ? "" : "s"}, last ${p.last_visit ? dayLabel(p.last_visit.start) : ""}`;
+    return p.next_visit ? `Next ${dayLabel(p.next_visit.start)} · ${seen}` : seen;
+  }
+  if (p.next_visit) return `${p.next_visit.offer ? "Offered" : "First visit"} ${dayLabel(p.next_visit.start)}`;
+  if (p.waiting) return "On your waitlist";
+  return "Not seen yet";
+}
+
 function PatientsView({ shell }: { shell: Shell }) {
   const [q, setQ] = useState("");
   const [query, setQuery] = useState("");
+  const [filter, setFilter] = useState<Filter>(() => {
+    try { return (localStorage.getItem("cq.patientFilter") as Filter) || "all"; } catch { return "all"; }
+  });
   useEffect(() => { const t = setTimeout(() => setQuery(q), 250); return () => clearTimeout(t); }, [q]);
-  const [people] = useData<DoctorPatient[]>(() => api.doctor.patients(query), [query]);
+  useEffect(() => { try { localStorage.setItem("cq.patientFilter", filter); } catch { /* storage unavailable */ } }, [filter]);
+  // One request for everyone; the filter and its counts are worked out here, so switching is instant.
+  const [people] = useData<DoctorPatient[]>(() => api.doctor.patients(query), [query, shell.version]);
   const selected = shell.param ? Number(shell.param) : null;
+  const count = (f: Filter) => (people ?? []).filter((p) => f === "all" || p.group === f).length;
+  const shown = (people ?? []).filter((p) => filter === "all" || p.group === filter);
   return (
     <div className={`patients ${selected ? "has-sel" : ""}`}>
       <section className="card plist">
         <h1>Your patients</h1>
+        <div className="seg small-seg" role="tablist" aria-label="Which patients">
+          {FILTERS.map((f) => (
+            <button key={f.id} role="tab" aria-selected={filter === f.id} className={filter === f.id ? "on" : ""}
+              title={f.hint} onClick={() => setFilter(f.id)}>
+              {f.label} <span className="count">{people ? count(f.id) : ""}</span>
+            </button>
+          ))}
+        </div>
+        <p className="muted small filter-hint">{FILTERS.find((f) => f.id === filter)!.hint}.</p>
         <input className="search" type="search" placeholder="Search by name" value={q} onChange={(e) => setQ(e.target.value)} aria-label="Search patients" />
-        {!people ? <p className="muted">Loading…</p> : people.length === 0 ? <p className="muted">Nobody found.</p> : (
+        {!people ? <p className="muted">Loading…</p> : shown.length === 0 ? (
+          <p className="muted">{q ? "Nobody found." : filter === "new" ? "No new patients right now." : "Nobody here yet."}</p>
+        ) : (
           <ul>
-            {people.slice(0, 200).map((p) => (
+            {shown.slice(0, 200).map((p) => (
               <li key={p.id}>
                 <a href={`#/patients/${p.id}`} className={p.id === selected ? "on" : ""} aria-current={p.id === selected ? "true" : undefined}>
-                  <b>{p.name}</b>
-                  <span className="muted small">
-                    {p.next_visit ? `Next: ${dayLabel(p.next_visit.start)}` : p.last_visit ? `Last seen ${dayLabel(p.last_visit.start)}` : "No visits yet"}
-                  </span>
+                  <span className="pname"><b>{p.name}</b>{p.group === "new" && <span className="tag new">New</span>}</span>
+                  <span className="muted small">{patientLine(p)}</span>
                 </a>
               </li>
             ))}
@@ -489,12 +635,46 @@ function PatientRecordView({ shell, id }: { shell: Shell; id: number }) {
   const [rec, error] = useData<PatientRecord>(() => api.doctor.patient(id), [id, shell.version]);
   if (error) return <Empty>{error}</Empty>;
   if (!rec || rec.id !== id) return <p className="muted">Loading…</p>;
-  const seen = rec.history.filter((v) => v.status === "completed").length;
+  return <RecordTabs shell={shell} rec={rec} />;
+}
+
+function RecordTabs({ shell, rec }: { shell: Shell; rec: PatientRecord }) {
+  const [view, setView] = useState<"chart" | "visits">("chart");
   return (
     <div>
       <a className="link back" href="#/patients">‹ All patients</a>
-      <h2>{rec.name}</h2>
-      <p className="muted">{rec.phone} · {seen} visit{seen === 1 ? "" : "s"} with you</p>
+      <h2>{rec.name} {rec.group === "new" && <span className="tag new">New patient</span>}</h2>
+      <p className="muted">{rec.phone} · {rec.group === "new" ? "not seen by you yet" : `${rec.visits} visit${rec.visits === 1 ? "" : "s"} with you`}</p>
+      <div className="seg small-seg rec-tabs" role="tablist">
+        <button role="tab" aria-selected={view === "chart"} className={view === "chart" ? "on" : ""} onClick={() => setView("chart")}>Chart</button>
+        <button role="tab" aria-selected={view === "visits"} className={view === "visits" ? "on" : ""} onClick={() => setView("visits")}>
+          Visits with you
+        </button>
+      </div>
+      {view === "chart" ? (
+        <>
+          <SummaryCard key={rec.id} shell={shell} patientId={rec.id} />
+          <ChartView shell={shell} patientId={rec.id} editable />
+        </>
+      ) : <RecordVisits shell={shell} rec={rec} />}
+    </div>
+  );
+}
+
+function RecordVisits({ shell, rec }: { shell: Shell; rec: PatientRecord }) {
+  return (
+    <div>
+      {rec.waiting.length > 0 && (
+        <div className="note-box">
+          {rec.waiting.map((w) => (
+            <p key={w.id}>
+              <b>{w.status === "offered" ? "A time is being offered to them" : "On your waitlist"}</b>{" "}
+              for {dayLabel(w.earliest)} to {dayLabel(w.latest)}{w.time_of_day !== "any" ? `, ${timeOfDayText(w.time_of_day)}` : ""}
+              {w.priority > 0 ? ". Rebooking first, because a visit with you was cancelled." : "."}
+            </p>
+          ))}
+        </div>
+      )}
       <h3>Coming up</h3>
       {rec.upcoming.length === 0 ? <p className="muted">Nothing booked.</p> : (
         <ul className="visit-list">{rec.upcoming.map((v) => (
@@ -503,7 +683,7 @@ function PatientRecordView({ shell, id }: { shell: Shell; id: number }) {
         ))}</ul>
       )}
       <h3>History with you</h3>
-      {rec.history.length === 0 ? <p className="muted">No past visits.</p> : (
+      {rec.history.length === 0 ? <p className="muted">{rec.group === "new" ? "You haven't seen them before." : "No past visits."}</p> : (
         <ol className="timeline">
           {rec.history.map((v) => <RecordVisit key={v.id} shell={shell} v={v} name={rec.name} />)}
         </ol>
@@ -516,9 +696,10 @@ function PatientRecordView({ shell, id }: { shell: Shell; id: number }) {
 function RecordVisit({ shell, v, name }: { shell: Shell; v: Visit; name: string }) {
   const [editing, setEditing] = useState(false);
   const [note, setNote] = useState(v.note ?? "");
+  const [checked, setChecked] = useState<NoteCheck | null>(null);
   return (
     <li className={v.status}>
-      <div className="when"><b>{parseLocal(v.start).toLocaleDateString([], { month: "short", day: "numeric" })}</b>
+      <div className="when"><b>{parseLocal(v.start).toLocaleDateString(LOCALE, { month: "short", day: "numeric" })}</b>
         <span className="muted small">{parseLocal(v.start).getFullYear()}</span></div>
       <div className="what">
         <p><span className="muted">{timeLabel(v.start)}</span>
@@ -527,8 +708,14 @@ function RecordVisit({ shell, v, name }: { shell: Shell; v: Visit; name: string 
         {v.status === "cancelled" && v.cancel_reason && <p className="muted small">{CANCEL_LABEL[v.cancel_reason]?.replace("You cancelled", "The patient cancelled") ?? "Cancelled"}</p>}
         {v.status === "completed" && (editing ? (
           <form className="close-visit" onSubmit={(e) => { e.preventDefault(); shell.run(() => api.doctor.note(v.id, note), "Note saved.").then(() => setEditing(false)); }}>
-            <textarea value={note} onChange={(e) => setNote(e.target.value)} rows={3} maxLength={2000} aria-label="Visit note" />
-            <div className="row"><button className="primary small-btn">Save note</button><button type="button" className="link" onClick={() => setEditing(false)}>Cancel</button></div>
+            <textarea value={note} onChange={(e) => { setNote(e.target.value); setChecked(null); }} rows={3} maxLength={2000}
+              aria-label="Visit note" />
+            {checked && <NoteFindings result={checked} />}
+            <div className="row">
+              <button className="primary small-btn">Save note</button>
+              <NoteChecker shell={shell} appointmentId={v.id} note={note} onResult={setChecked} />
+              <button type="button" className="link" onClick={() => setEditing(false)}>Cancel</button>
+            </div>
           </form>
         ) : (
           <>

@@ -1,0 +1,248 @@
+{
+  "notes": 68,
+  "gateway": "https://nexusai-latest.onrender.com",
+  "results": {
+    "rules": {
+      "notes": 68,
+      "planted": 47,
+      "caught": 22,
+      "recall": 0.4681,
+      "recall_rule_categories": 1.0,
+      "recall_ai_categories": 0.0,
+      "by_category": {
+        "impossible_value": "8/8",
+        "vitals_mismatch": "4/4",
+        "allergy_conflict": "6/6",
+        "follow_up_not_booked": "4/4",
+        "contradiction": "0/11",
+        "chart_mismatch": "0/6",
+        "missing_plan": "0/8"
+      },
+      "false_alarms": 0,
+      "clean_notes_flagged": 0,
+      "clean_notes": 21,
+      "ai_unavailable": 0,
+      "ai_errors": {},
+      "round2": {
+        "planted": 6,
+        "caught": 0,
+        "clean": 6,
+        "clean_flagged": 0
+      },
+      "latency_ms": {
+        "mean": 0,
+        "p95": 0
+      },
+      "misses": [
+        {
+          "id": 23,
+          "category": "contradiction",
+          "expected": "right ear",
+          "found": []
+        },
+        {
+          "id": 24,
+          "category": "contradiction",
+          "expected": "decrease lisinopril",
+          "found": []
+        },
+        {
+          "id": 25,
+          "category": "contradiction",
+          "expected": "No fever",
+          "found": []
+        },
+        {
+          "id": 26,
+          "category": "contradiction",
+          "expected": "denies chest pain",
+          "found": []
+        },
+        {
+          "id": 27,
+          "category": "contradiction",
+          "expected": "left knee",
+          "found": []
+        },
+        {
+          "id": 28,
+          "category": "contradiction",
+          "expected": "Continue metformin",
+          "found": []
+        },
+        {
+          "id": 29,
+          "category": "contradiction",
+          "expected": "Non-smoker",
+          "found": []
+        },
+        {
+          "id": 30,
+          "category": "contradiction",
+          "expected": "left leg",
+          "found": []
+        },
+        {
+          "id": 31,
+          "category": "chart_mismatch",
+          "expected": "Continue glipizide",
+          "found": []
+        },
+        {
+          "id": 32,
+          "category": "chart_mismatch",
+          "expected": "No known drug allergies",
+          "found": []
+        },
+        {
+          "id": 33,
+          "category": "chart_mismatch",
+          "expected": "Continue hydrochlorothiazide",
+          "found": []
+        },
+        {
+          "id": 34,
+          "category": "chart_mismatch",
+          "expected": "Continue prednisone",
+          "found": []
+        },
+        {
+          "id": 35,
+          "category": "chart_mismatch",
+          "expected": "no allergies",
+          "found": []
+        },
+        {
+          "id": 36,
+          "category": "chart_mismatch",
+          "expected": "no regular medications",
+          "found": []
+        },
+        {
+          "id": 37,
+          "category": "missing_plan",
+          "expected": "urinary tract infection",
+          "found": []
+        },
+        {
+          "id": 38,
+          "category": "missing_plan",
+          "expected": "pneumonia",
+          "found": []
+        },
+        {
+          "id": 39,
+          "category": "missing_plan",
+          "expected": "new type 2 diabetes",
+          "found": []
+        },
+        {
+          "id": 40,
+          "category": "missing_plan",
+          "expected": "possible fracture",
+          "found": []
+        },
+        {
+          "id": 41,
+          "category": "missing_plan",
+          "expected": "cause unclear",
+          "found": []
+        },
+        {
+          "id": 57,
+          "category": "contradiction",
+          "expected": "no wheeze",
+          "found": []
+        },
+        {
+          "id": 58,
+          "category": "contradiction",
+          "expected": "Stop lisinopril",
+          "found": []
+        },
+        {
+          "id": 59,
+          "category": "contradiction",
+          "expected": "Right ankle",
+          "found": []
+        },
+        {
+          "id": 60,
+          "category": "missing_plan",
+          "expected": "gastroenteritis",
+          "found": []
+        },
+        {
+          "id": 61,
+          "category": "missing_plan",
+          "expected": "plaque psoriasis",
+          "found": []
+        },
+        {
+          "id": 62,
+          "category": "missing_plan",
+          "expected": "iron deficiency anaemia",
+          "found": []
+        }
+      ],
+      "alarms": []
+    },
+    "rules+ai": {
+      "notes": 68,
+      "planted": 47,
+      "caught": 45,
+      "recall": 0.9574,
+      "recall_rule_categories": 1.0,
+      "recall_ai_categories": 0.92,
+      "by_category": {
+        "impossible_value": "8/8",
+        "vitals_mismatch": "4/4",
+        "allergy_conflict": "6/6",
+        "follow_up_not_booked": "4/4",
+        "contradiction": "11/11",
+        "chart_mismatch": "6/6",
+        "missing_plan": "6/8"
+      },
+      "false_alarms": 1,
+      "clean_notes_flagged": 0,
+      "clean_notes": 21,
+      "ai_unavailable": 1,
+      "ai_errors": {
+        "ReadTimeout": 1
+      },
+      "round2": {
+        "planted": 6,
+        "caught": 5,
+        "clean": 6,
+        "clean_flagged": 0
+      },
+      "latency_ms": {
+        "mean": 2010,
+        "p95": 4020
+      },
+      "misses": [
+        {
+          "id": 38,
+          "category": "missing_plan",
+          "expected": "pneumonia",
+          "found": []
+        },
+        {
+          "id": 60,
+          "category": "missing_plan",
+          "expected": "gastroenteritis",
+          "found": []
+        }
+      ],
+      "alarms": [
+        {
+          "id": 11,
+          "category": "vitals_mismatch",
+          "source": "ai",
+          "message": "The patient has no current medications or ongoing conditions listed in the chart.",
+          "quote": "feels better on current plan"
+        }
+      ]
+    }
+  }
+}

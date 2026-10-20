@@ -36,9 +36,19 @@ Keys:
 - "specialty": one of the specialties in the list, or null
 - "earliest": first acceptable date, YYYY-MM-DD
 - "latest": last acceptable date, YYYY-MM-DD
-- "time_of_day": "morning", "afternoon" or "any"
-Today is {today} ({weekday}). "Next week" means Monday to Friday of next week.
-If no date is given, use today to 14 days from today.
+- "time_of_day": "morning", "afternoon", "evening", "night" or "any"
+Rules:
+- Today is {today} ({weekday}). Each doctor sets their own hours; most work Monday to Friday.
+- "Next week" means Monday to Friday of next week; "this week" means today to this Friday.
+- A weekday on its own ("Tuesday") is the coming one, today included; "next Tuesday" is the Tuesday of next week.
+- "Before Friday" ends the day before; "X or Y" covers both days; "in the next N days" ends N days from today.
+- If no date is given, use today to 14 days from today.
+- "morning" is 6 AM to noon; "afternoon", "after lunch", "after work" and "after school" mean "afternoon"
+  (noon to 6 PM); "evening" and "tonight" are 6 to 10 PM; "night", "late night" and "overnight" are 10 PM to 6 AM.
+- Words about when symptoms happened ("woke up at night", "since last night") are not the time of the visit.
+- Pick the specialty from the problem: children and babies are Pediatrics even for a rash or a physical;
+  skin is Dermatology; heart, chest and blood pressure are Cardiology; anything else is General Practice.
+- Only set "provider" when the patient names a doctor; then leave "specialty" null.
 Providers: {providers}"""
 
 
@@ -68,12 +78,19 @@ def rule_parse(text: str, today: date, providers: list[dict]) -> Intent:
                 intent.specialty = specialty
                 break
 
-    if "morning" in t or "before noon" in t or re.search(r"\b(8|9|10|11)\s*am\b", t):
+    # "last night" / "at night" describe symptoms, not the visit, so drop them before looking.
+    visit = re.sub(r"\b(last|at|every|during the|all) night\b", " ", t)
+    if "morning" in visit or "before noon" in visit or re.search(r"\b(6|7|8|9|10|11)\s*am\b", visit):
         intent.time_of_day = "morning"
-    elif "afternoon" in t or "after lunch" in t or re.search(r"\b(12|1|2|3|4)\s*pm\b", t):
+    elif "afternoon" in visit or "after lunch" in visit or re.search(r"\b(12|1|2|3|4|5)\s*pm\b", visit):
         intent.time_of_day = "afternoon"
+    elif re.search(r"\b(late night|overnight|night shift|after midnight|night)\b", visit) or re.search(
+            r"\b(10|11)\s*pm\b|\b(12|1|2|3|4|5)\s*am\b", visit):
+        intent.time_of_day = "night"
+    elif re.search(r"\b(evening|tonight)\b", visit) or re.search(r"\b(6|7|8|9)\s*pm\b", visit):
+        intent.time_of_day = "evening"
 
-    if "today" in t:
+    if "today" in t or "tonight" in t:
         intent.earliest = intent.latest = today
     elif "tomorrow" in t:
         intent.earliest = intent.latest = today + timedelta(days=1)
@@ -128,28 +145,53 @@ def validate_llm_intent(data: dict, today: date, providers: list[dict]) -> Inten
     return intent
 
 
+def named_in(text: str, provider_name: str) -> bool:
+    """Did the patient mention this doctor? Their first or last name counts ("Patel", "Dr Maya")."""
+    t = text.lower()
+    parts = [w for w in provider_name.lower().replace("dr.", "").split() if len(w) > 2]
+    return any(re.search(rf"\b{re.escape(w)}\b", t) for w in parts)
+
+
+def keep_unnamed_doctors_open(intent: Intent, text: str, providers: list[dict]) -> Intent:
+    """If the model picked a doctor the patient never named, search the whole specialty instead.
+
+    "My son has a fever" means any pediatrician; narrowing it to one doctor would hide
+    other doctors' open times. Checked against the patient's own words, so it doesn't
+    depend on the model following the prompt.
+    """
+    if intent.provider_id is None:
+        return intent
+    provider = next(p for p in providers if p["id"] == intent.provider_id)
+    if not named_in(text, provider["name"]):
+        intent.provider_id, intent.specialty = None, provider["specialty"]
+    return intent
+
+
 class Assistant:
-    def __init__(self, clinic, nexusai_url: str | None, api_key: str | None = None, timeout_s: float = 25.0,
+    def __init__(self, clinic, nexusai_url: str | None, api_key: str | None = None, timeout_s: float = 3.0,
                  transport: httpx.BaseTransport | None = None):
         self.clinic = clinic
         self.url = nexusai_url
         self.api_key = api_key
         self.timeout_s = timeout_s
         self.transport = transport
+        self.use_cache = True  # the accuracy test turns this off, so every answer is fresh from a model
 
     def _ask_gateway(self, text: str, today: date, providers: list[dict]) -> tuple[Intent, dict]:
         listing = "; ".join(f"{p['name']} ({p['specialty']})" for p in providers)
         system = SYSTEM_PROMPT.format(today=today.isoformat(), weekday=WEEKDAYS[today.weekday()].title(),
                                       providers=listing)
         headers = {"X-API-Key": self.api_key} if self.api_key else {}
+        payload = {"messages": [{"role": "system", "content": system}, {"role": "user", "content": text}],
+                   "temperature": 0, "max_tokens": 300}
+        if not self.use_cache:
+            payload["cache"] = False
         with httpx.Client(timeout=self.timeout_s, transport=self.transport) as client:
-            resp = client.post(f"{self.url}/v1/chat", headers=headers, json={
-                "messages": [{"role": "system", "content": system}, {"role": "user", "content": text}],
-                "temperature": 0, "max_tokens": 300,
-            })
+            resp = client.post(f"{self.url}/v1/chat", headers=headers, json=payload)
         resp.raise_for_status()
         body = resp.json()
         intent = validate_llm_intent(_extract_json(body.get("content", "")), today, providers)
+        intent = keep_unnamed_doctors_open(intent, text, providers)
         return intent, {"model": body.get("model"), "cache": body.get("cache"), "cost_usd": body.get("cost_usd"),
                         "latency_ms": body.get("latency_ms")}
 
