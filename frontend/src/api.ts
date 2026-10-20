@@ -133,7 +133,7 @@ export type ActivityEvent = {
 };
 export type Health = {
   status: string; version: string; time: string; database: string; cache: string; queue: string; assistant: string;
-  demo_logins: boolean;
+  demo_logins: boolean; timezone: string;
 };
 
 export class ApiError extends Error {
@@ -234,6 +234,18 @@ export const toISODate = (d: Date) =>
 export const parseLocal = (iso: string) => new Date(iso.length === 10 ? `${iso}T00:00:00` : iso);
 /** Dates and times are always shown US-style with a 12-hour clock ("2:30 PM"), whatever the browser's region. */
 export const LOCALE = "en-US";
+
+// Every time in the app is the clinic's local time. The zone comes from /api/health (CQ_CLINIC_TIMEZONE).
+let clinicZone = "America/Los_Angeles";
+export const setClinicZone = (zone: string) => { clinicZone = zone; };
+/** The clinic's zone as people say it: "PT" / "Pacific Time" (falls back to "PDT" / the long name on older browsers). */
+export function zoneName(style: "short" | "long" = "short"): string {
+  const pick = (timeZoneName: string) => new Intl.DateTimeFormat(LOCALE, { timeZone: clinicZone, timeZoneName } as Intl.DateTimeFormatOptions)
+    .formatToParts(new Date()).find((p) => p.type === "timeZoneName")?.value ?? "";
+  try { return pick(style === "short" ? "shortGeneric" : "longGeneric"); } catch {
+    try { return pick(style); } catch { return clinicZone; }
+  }
+}
 export const timeLabel = (iso: string) =>
   parseLocal(iso).toLocaleTimeString(LOCALE, { hour: "numeric", minute: "2-digit", hour12: true });
 export const dayLabel = (iso: string) =>

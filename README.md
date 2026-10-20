@@ -34,6 +34,8 @@ The other doctors are `james.okafor@`, `lena.brooks@` and `arjun.mehta@demo.care
 
 Everyone in the demo is made up, and the charts come from [Synthea](https://synthetichealth.github.io/synthea/), a generator of realistic synthetic patients. Please don't enter real medical information.
 
+The demo clinic is in Los Angeles: all times are Pacific Time (PT), wherever you're viewing from.
+
 | Doctor's day, with the next patient's chart and AI summary | The note check on a visit write-up |
 | --- | --- |
 | ![Doctor's day](docs/screenshots/doctor-today.png) | ![Note check](docs/screenshots/note-check.png) |
@@ -344,7 +346,7 @@ To include PostgreSQL, Redis and RabbitMQ locally, set `CQ_TEST_DATABASE_URL`, `
 - **Doctors can't sign up.** Patients create their own accounts; doctor accounts are created by the clinic's management, since a doctor account can read charts.
 - **The server decides who you are.** Patient routes ignore any patient id from the browser and use the session's. A record that isn't yours returns 404, not 403, so ids can't be probed.
 - **The sample accounts' password isn't in the code.** It comes from `CQ_DEMO_PASSWORD` and is applied on every start; without it, nobody can sign in to them.
-- **Times are clinic-local.** A 9:00 slot means 9:00 at the clinic, wherever the server runs; the FHIR API adds the clinic's offset (`CQ_CLINIC_TIMEZONE`).
+- **Times are clinic-local, in one time zone.** A 9:00 AM visit means 9:00 AM at the clinic, so every viewer sees the clinic's time, as patient portals usually do, labelled with the zone (PT). The zone is set with `CQ_CLINIC_TIMEZONE` (Pacific for the demo), and the server's clock reads it too, so a server running on UTC still knows what "today" is; the FHIR API adds the offset. The limit: one deployment serves one time zone. Clinics in several zones, or telehealth across zones, would need times stored in UTC and converted for each clinic.
 
 ## Project layout
 

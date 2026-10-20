@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { LOCALE, addDays, parseLocal, Slot, timeLabel, Week } from "./api";
+import { LOCALE, addDays, parseLocal, Slot, timeLabel, Week, zoneName } from "./api";
 
 const ROW = 46; // px per half-hour row, including the gap
 
@@ -104,8 +104,11 @@ export function WeekNav({ start, today, onChange }: { start: string; today: stri
 
 export function Legend({ items }: { items: [string, string][] }) {
   return (
-    <div className="legend" aria-hidden="true">
-      {items.map(([k, label]) => <span key={k}><i className={`k-${k}`} />{label}</span>)}
+    <div className="legend-row">
+      <div className="legend" aria-hidden="true">
+        {items.map(([k, label]) => <span key={k}><i className={`k-${k}`} />{label}</span>)}
+      </div>
+      <p className="tz-note">Times are {zoneName("long")} ({zoneName()})</p>
     </div>
   );
 }

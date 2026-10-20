@@ -39,7 +39,8 @@ def test_without_a_password_set_nobody_can_sign_in_to_the_sample_accounts():
 
 def test_the_demo_shortcut_is_off_by_default():
     c = client(demo_password="x" * 10)
-    assert c.get("/api/health").json()["demo_logins"] is False
+    health = c.get("/api/health").json()
+    assert health["demo_logins"] is False and health["timezone"] == "America/Los_Angeles"
     assert c.post("/api/auth/demo", json={"role": "doctor"}).status_code == 403
     assert Settings.from_env().demo_logins is False
 

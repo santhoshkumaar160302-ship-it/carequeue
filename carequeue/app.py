@@ -251,7 +251,8 @@ def create_app(services: Services | None = None) -> FastAPI:
                 "time": clinic.clock.now().isoformat(),
                 "database": services.engine.dialect.name if services.engine else "unknown",
                 "cache": clinic.cache.backend, "queue": clinic.broker.kind,
-                "assistant": "nexusai" if settings.nexusai_url else "rules", "demo_logins": settings.demo_logins}
+                "assistant": "nexusai" if settings.nexusai_url else "rules", "demo_logins": settings.demo_logins,
+                "timezone": settings.clinic_timezone}
 
     @app.get("/api/providers")
     def providers():

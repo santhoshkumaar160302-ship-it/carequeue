@@ -3,7 +3,7 @@ import type { Shell } from "./App";
 import {
   LOCALE, ActivityEvent, Affected, api, ChartBrief, NoteCheck, VitalsInput, CANCEL_LABEL, ChangeResult, dayLabel, DoctorPatient, HoursDay, HoursInput, longDay,
   parseLocal, PatientRecord, Preview, Shift, ShiftName, Slot, SlotStory, StatusLabelKey, STATUS_LABEL, StoryEvent, timeLabel, TimeOff,
-  TimeOffInput, timeOfDayText, Today, until, Visit, WaitlistRow, Week,
+  TimeOffInput, timeOfDayText, Today, until, Visit, WaitlistRow, Week, zoneName,
 } from "./api";
 import { Legend, WeekGrid, WeekNav } from "./Calendar";
 import { NoteChecker, NoteFindings, SummaryCard } from "./AiHelp";
@@ -140,7 +140,7 @@ function TodayView({ shell }: { shell: Shell }) {
       <div className="stack">
         <div>
           <h1 className="hello">{greeting(now)}, Dr. {surname(today.provider.name)}.</h1>
-          <p className="muted">{longDay(today.date)}</p>
+          <p className="muted">{longDay(today.date)} · {zoneName("long")}</p>
         </div>
         <div className="stats">
           <div><b>{c.booked}</b><span>visits today</span></div>

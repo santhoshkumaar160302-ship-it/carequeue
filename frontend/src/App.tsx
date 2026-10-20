@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { api, ApiError, Health, initials, Provider, toISODate, User } from "./api";
+import { api, ApiError, Health, initials, Provider, setClinicZone, toISODate, User } from "./api";
 import { DoctorPortal, DOCTOR_TABS } from "./Doctor";
 import { Login } from "./Login";
 import { PatientPortal, PATIENT_TABS } from "./Patient";
@@ -47,7 +47,11 @@ export default function App() {
   const now = useCallback(() => new Date(Date.now() + offset), [offset]);
 
   useEffect(() => {
-    api.health().then((h) => { setHealth(h); setOffset(new Date(h.time).getTime() - Date.now()); }).catch(() => {});
+    api.health().then((h) => {
+      if (h.timezone) setClinicZone(h.timezone);
+      setHealth(h);
+      setOffset(new Date(h.time).getTime() - Date.now());
+    }).catch(() => {});
     api.providers().then(setProviders).catch(() => {});
     api.me().then(setUser).catch(() => setUser(null));
   }, []);

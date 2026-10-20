@@ -2,7 +2,7 @@ import { FormEvent, useEffect, useState } from "react";
 import type { Shell } from "./App";
 import {
   LOCALE, addDays, api, TIME_OF_DAY, timeOfDayText, CANCEL_LABEL, dayLabel, longDay, MyWaitlist, Overview, parseLocal, Slot, STATUS_LABEL, Suggestion,
-  timeLabel, until, Visit, Week,
+  timeLabel, until, Visit, Week, zoneName,
 } from "./api";
 import { Legend, WeekGrid, WeekNav } from "./Calendar";
 import { ChartView } from "./ChartView";
@@ -113,7 +113,7 @@ function Home({ shell, o }: { shell: Shell; o: Overview | null }) {
         {o.next ? (
           <section className="hero card">
             <p className="kicker">Your next visit, {until(o.next.start, now)}</p>
-            <h2>{longDay(o.next.start)}<br />{timeLabel(o.next.start)}</h2>
+            <h2>{longDay(o.next.start)}<br />{timeLabel(o.next.start)} <span className="tz">{zoneName()}</span></h2>
             <p className="hero-who"><b>{o.next.provider}</b> <span className="muted">{o.next.specialty}</span></p>
             <VisitActions shell={shell} visit={o.next} o={o} />
           </section>
