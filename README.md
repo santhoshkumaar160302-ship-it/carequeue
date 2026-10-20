@@ -3,6 +3,8 @@
 ![CI](https://github.com/santhoshkumaar160302-ship-it/carequeue/actions/workflows/ci.yml/badge.svg)
 ![CD](https://github.com/santhoshkumaar160302-ship-it/carequeue/actions/workflows/cd.yml/badge.svg)
 
+**Live demo: [carequeue-0u3y.onrender.com](https://carequeue-0u3y.onrender.com)** · sign in as `maya.patel@demo.carequeue` or `harper.lopez@demo.carequeue`, password `carequeuedemo123`. It runs on Render's free tier, so the first visit can take about a minute while it wakes up.
+
 CareQueue is a clinic scheduling app built around one problem: when a patient cancels, that slot usually goes to waste, while other patients are waiting days for an appointment. CareQueue fills those gaps automatically. Around that core it has a patient chart (with a FHIR R4 API) and two AI tools for doctors that check their own work before anyone sees it.
 
 ![The sign-in page](docs/screenshots/signin.png)
