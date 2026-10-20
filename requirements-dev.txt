@@ -1,5 +1,5 @@
 -r requirements.txt
 pytest==9.1.1
 pytest-cov==7.1.0
-ruff==0.17.0
+ruff==0.17.1
 fhir.resources==8.3.0  # only to check in tests that /fhir output is valid FHIR
