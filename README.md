@@ -196,7 +196,7 @@ The "Find a time" box can understand requests in two ways: keyword rules, or an 
 | Mean wait | under 1 ms | 1.9 s | 1.4 s |
 | Slowest 5% (p95) | under 1 ms | 6.2 s | 3.0 s (the limit) |
 
-Measured on Oct 18, 2026 against the live gateway, with NexusAI's cache bypassed so every answer came from a model (Gemini Flash-Lite, chosen by NexusAI's router). This was before evenings and nights were added to the search. There were no gateway errors, and the run cost about $0.015, roughly **$0.25 per 1,000 searches**. Results are in `results/assistant_eval.json`.
+Measured on Oct 18, 2026 against the live gateway, with NexusAI's cache bypassed so every answer came from a model. NexusAI's router chose the models: Gemini 3.1 Flash-Lite for 30 answers, Gemini 3.5 Flash-Lite for 29 and Gemini 3.6 Flash for 1. This was before evenings and nights were added to the search. There were no gateway errors, and the run cost about $0.015, roughly **$0.25 per 1,000 searches**. Results are in `results/assistant_eval.json`.
 
 What this shows:
 - **The rules get the doctor right but struggle with dates:** "Oct 22", "the 21st", "Tuesday or Wednesday", "in the next 3 days", "tmrw". The LLM handles nearly all of them, typos included.
