@@ -36,14 +36,16 @@ Keys:
 - "specialty": one of the specialties in the list, or null
 - "earliest": first acceptable date, YYYY-MM-DD
 - "latest": last acceptable date, YYYY-MM-DD
-- "time_of_day": "morning", "afternoon" or "any"
+- "time_of_day": "morning", "afternoon", "evening", "night" or "any"
 Rules:
-- Today is {today} ({weekday}). The clinic is open Monday to Friday.
+- Today is {today} ({weekday}). Each doctor sets their own hours; most work Monday to Friday.
 - "Next week" means Monday to Friday of next week; "this week" means today to this Friday.
 - A weekday on its own ("Tuesday") is the coming one, today included; "next Tuesday" is the Tuesday of next week.
 - "Before Friday" ends the day before; "X or Y" covers both days; "in the next N days" ends N days from today.
 - If no date is given, use today to 14 days from today.
-- "morning" is before noon; "afternoon", "after lunch", "after work" and "after school" mean "afternoon".
+- "morning" is 6 AM to noon; "afternoon", "after lunch", "after work" and "after school" mean "afternoon"
+  (noon to 6 PM); "evening" and "tonight" are 6 to 10 PM; "night", "late night" and "overnight" are 10 PM to 6 AM.
+- Words about when symptoms happened ("woke up at night", "since last night") are not the time of the visit.
 - Pick the specialty from the problem: children and babies are Pediatrics even for a rash or a physical;
   skin is Dermatology; heart, chest and blood pressure are Cardiology; anything else is General Practice.
 - Only set "provider" when the patient names a doctor; then leave "specialty" null.
@@ -76,12 +78,19 @@ def rule_parse(text: str, today: date, providers: list[dict]) -> Intent:
                 intent.specialty = specialty
                 break
 
-    if "morning" in t or "before noon" in t or re.search(r"\b(8|9|10|11)\s*am\b", t):
+    # "last night" / "at night" describe symptoms, not the visit, so drop them before looking.
+    visit = re.sub(r"\b(last|at|every|during the|all) night\b", " ", t)
+    if "morning" in visit or "before noon" in visit or re.search(r"\b(6|7|8|9|10|11)\s*am\b", visit):
         intent.time_of_day = "morning"
-    elif "afternoon" in t or "after lunch" in t or re.search(r"\b(12|1|2|3|4)\s*pm\b", t):
+    elif "afternoon" in visit or "after lunch" in visit or re.search(r"\b(12|1|2|3|4|5)\s*pm\b", visit):
         intent.time_of_day = "afternoon"
+    elif re.search(r"\b(late night|overnight|night shift|after midnight|night)\b", visit) or re.search(
+            r"\b(10|11)\s*pm\b|\b(12|1|2|3|4|5)\s*am\b", visit):
+        intent.time_of_day = "night"
+    elif re.search(r"\b(evening|tonight)\b", visit) or re.search(r"\b(6|7|8|9)\s*pm\b", visit):
+        intent.time_of_day = "evening"
 
-    if "today" in t:
+    if "today" in t or "tonight" in t:
         intent.earliest = intent.latest = today
     elif "tomorrow" in t:
         intent.earliest = intent.latest = today + timedelta(days=1)

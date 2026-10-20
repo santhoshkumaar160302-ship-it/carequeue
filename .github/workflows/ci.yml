@@ -81,6 +81,10 @@ jobs:
       - run: python scripts/simulate.py --weeks 6 --out /tmp/sim.json --require-improvement
       - name: Assistant accuracy (keyword rules; the LLM run needs a live gateway, see README)
         run: python scripts/eval_assistant.py --rules-only --min-accuracy 0.55 --out /tmp/assistant_eval.json
+      - name: Note check (rules catch their mistake types, no clean note flagged)
+        run: python scripts/eval_notes.py --rules-only --min-rules-recall 0.95 --out /tmp/note_check_eval.json
+      - name: Summary guard (basic summaries, every tampered number rejected)
+        run: python scripts/eval_summary.py --basic-only --out /tmp/summary_eval.json
 
   frontend:
     name: React app type-checks and builds
@@ -106,7 +110,8 @@ jobs:
       - name: Build
         run: docker build --build-arg GIT_SHA=${{ github.sha }} -t carequeue:ci .
       - name: Start the container
-        run: docker run -d --name carequeue -p 8000:8000 carequeue:ci
+        # A throwaway password for the sample accounts, only for this CI container.
+        run: docker run -d --name carequeue -p 8000:8000 -e CQ_DEMO_PASSWORD=ci-smoke-${{ github.run_id }} carequeue:ci
       - name: Wait for /api/health and check the build commit
         run: |
           for i in $(seq 1 30); do
@@ -124,14 +129,17 @@ jobs:
           curl -fsS http://localhost:8000/api/providers
           # Signed out, the portals must refuse.
           test "$(curl -s -o /dev/null -w '%{http_code}' http://localhost:8000/api/me/overview)" = 401
-          # Sign in as the demo patient and the demo doctor (the session lives in a cookie).
-          curl -fsS -c patient.txt -X POST http://localhost:8000/api/auth/demo -H 'content-type: application/json' \
-            -d '{"role":"patient"}'
+          # The demo shortcut is off in a real deployment.
+          test "$(curl -s -o /dev/null -w '%{http_code}' -X POST http://localhost:8000/api/auth/demo \
+            -H 'content-type: application/json' -d '{"role":"patient"}')" = 403
+          # Sign in to the sample patient and doctor accounts (the session lives in a cookie).
+          curl -fsS -c patient.txt -X POST http://localhost:8000/api/auth/login -H 'content-type: application/json' \
+            -d '{"email":"harper.lopez@demo.carequeue","password":"ci-smoke-${{ github.run_id }}","role":"patient"}'
           curl -fsS -b patient.txt http://localhost:8000/api/me/overview
           curl -fsS -b patient.txt -X POST http://localhost:8000/api/me/assistant -H 'content-type: application/json' \
             -d '{"text":"skin doctor next week"}'
-          curl -fsS -c doctor.txt -X POST http://localhost:8000/api/auth/demo -H 'content-type: application/json' \
-            -d '{"role":"doctor"}'
+          curl -fsS -c doctor.txt -X POST http://localhost:8000/api/auth/login -H 'content-type: application/json' \
+            -d '{"email":"maya.patel@demo.carequeue","password":"ci-smoke-${{ github.run_id }}","role":"doctor"}'
           curl -fsS -b doctor.txt http://localhost:8000/api/doctor/today
           curl -fsS -b doctor.txt http://localhost:8000/api/doctor/metrics
       - name: Make sure no secrets were baked into the image

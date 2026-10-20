@@ -58,6 +58,13 @@ class Visits:
                 a, sl, p = upcoming
                 last = self._last_visit(s, provider_id, p.id, before=sl.start)
                 next_patient = _visit(a, sl, patient=p) | {"now": sl.start <= now, "last_visit": last}
+            # Visits from earlier days that were never written up (Friday's, seen on Monday or at the weekend).
+            earlier = [_visit(a, sl, patient=p) | {"past": True, "now": False} for a, sl, p in s.execute(
+                select(Appointment, Slot, Patient).join(Slot, Appointment.slot_id == Slot.id)
+                .join(Patient, Appointment.patient_id == Patient.id)
+                .where(Slot.provider_id == provider_id, Appointment.status == "booked",
+                       Slot.start < datetime.combine(day, time.min))
+                .order_by(Slot.start.desc()).limit(10)).all()]
             # Earlier visits that already started but haven't been marked done yet.
             to_close = s.scalar(select(func.count()).select_from(Appointment).join(Slot)
                                 .where(Slot.provider_id == provider_id, Appointment.status == "booked",
@@ -69,7 +76,7 @@ class Visits:
             waiting = s.scalar(select(func.count()).select_from(WaitlistEntry).where(
                 WaitlistEntry.provider_id == provider_id, WaitlistEntry.status.in_(("waiting", "offered")))) or 0
         return {"provider": {"id": provider.id, "name": provider.name, "specialty": provider.specialty},
-                "date": day.isoformat(), "visits": visits, "next": next_patient,
+                "date": day.isoformat(), "visits": visits, "earlier": earlier, "next": next_patient,
                 "counts": {"booked": sum(1 for v in visits if v["status"] in ("booked", "completed", "no_show")),
                            "done": sum(1 for v in visits if v["status"] in DONE_STATUSES),
                            "to_close": to_close, "open_today": open_today, "waitlist": waiting}}

@@ -45,7 +45,7 @@ def test_shorter_hours_block_slots_and_they_cannot_be_booked(clinic, avail):
     assert all(datetime.fromisoformat(o["start"]).hour < 12 or datetime.fromisoformat(o["start"]).weekday() != 4
                for o in clinic.open_slots(_intent(1), limit=200))
     assert avail.hours(1)[4] == {"weekday": 4, "name": "Friday", "working": True, "start": "09:00",
-                                       "end": "12:00"}
+                                       "end": "12:00", "shift": "custom", "overnight": False}
 
 
 def _intent(provider_id):
@@ -100,8 +100,10 @@ def test_blocking_a_pending_offer_withdraws_it(clinic, avail):
 def test_hours_and_time_off_validation(clinic, avail):
     with pytest.raises(ClinicError, match="at least one"):
         avail.set_hours(1, [])
-    with pytest.raises(ClinicError, match="after the start"):
-        avail.set_hours(1, [{"weekday": 0, "start": "12:00", "end": "09:00"}])
+    with pytest.raises(ClinicError, match="must differ"):
+        avail.set_hours(1, [{"weekday": 0, "start": "09:00", "end": "09:00"}])
+    with pytest.raises(ClinicError, match="Shift must be"):
+        avail.set_hours(1, [{"weekday": 0, "shift": "graveyard"}])
     with pytest.raises(ClinicError, match="09:00"):
         avail.set_hours(1, [{"weekday": 0, "start": "9am", "end": "17:00"}])
     with pytest.raises(ClinicError, match="end after"):
@@ -187,3 +189,88 @@ def test_doctor_can_split_patients_into_seen_and_new(clinic, visits, clock):
         visits.doctor_patient(2, PATIENTS["Sofia"])  # not on Dr. Brooks's list at all
     with pytest.raises(ClinicError):
         visits.doctor_patients(1, group="everyone")
+
+
+def test_on_a_weekend_the_doctor_still_has_fridays_visits_to_write_up():
+    from datetime import datetime
+
+    from .test_api import as_doctor, make_client
+    client, _ = make_client(now=datetime(2026, 10, 18, 20, 17))  # Sunday evening
+    as_doctor(client)
+    today = client.get("/api/doctor/today").json()
+    assert today["visits"] == [] and today["earlier"]
+    assert all(v["start"].startswith("2026-10-16") for v in today["earlier"])  # Friday
+    assert today["counts"]["to_close"] == len(today["earlier"])
+    visit = today["earlier"][0]
+    out = client.post(f"/api/doctor/appointments/{visit['id']}/check-note", json={"note": "BP 1380/88, all fine."})
+    assert out.status_code == 200
+    assert client.post(f"/api/doctor/appointments/{visit['id']}/complete",
+                       json={"note": "Seen. BP 128/80, continue the plan."}).status_code == 200
+    assert len(client.get("/api/doctor/today").json()["earlier"]) == len(today["earlier"]) - 1
+
+
+def test_shifts_cover_the_clock_including_a_night_shift_past_midnight(clinic, avail):
+    from carequeue.availability import SHIFTS, Day, _covered
+    assert {n: (s, e) for n, (s, e, _) in SHIFTS.items()} == {
+        "morning": ("06:00", "14:00"), "day": ("09:00", "17:00"), "evening": ("14:00", "22:00"),
+        "night": ("22:00", "06:00")}
+    night = {0: Day(0, 22 * 60, 6 * 60)}  # Monday night shift
+    mon, tue = datetime(2026, 10, 12), datetime(2026, 10, 13)
+
+    def at(day, h, m=0):
+        start = day.replace(hour=h, minute=m)
+        return _covered(night, start, start + timedelta(minutes=30))
+    assert at(mon, 22) and at(mon, 23, 30) and at(tue, 0) and at(tue, 5, 30)
+    assert not at(mon, 21, 30) and not at(tue, 6) and not at(tue, 22)
+    custom = {0: Day(0, 18 * 60, 24 * 60)}  # "18:00" to "24:00"
+    assert _covered(custom, mon.replace(hour=23, minute=30), tue) and not _covered(custom, tue, tue.replace(minute=30))
+    out = avail.set_hours(1, [{"weekday": 0, "shift": "night"}, {"weekday": 2, "shift": "custom", "start": "18:00",
+                                                                  "end": "24:00"}])
+    assert [(h["shift"], h["start"], h["end"], h["overnight"]) for h in out["hours"] if h["working"]] == [
+        ("night", "22:00", "06:00", True), ("custom", "18:00", "24:00", False)]
+
+
+def test_morning_and_afternoon_never_mean_the_middle_of_the_night():
+    from carequeue.clinic import matches_time_of_day
+    day = datetime(2026, 10, 13)
+    assert [h for h in range(24) if matches_time_of_day(day.replace(hour=h), "morning")] == list(range(6, 12))
+    assert [h for h in range(24) if matches_time_of_day(day.replace(hour=h), "afternoon")] == list(range(12, 18))
+    assert all(matches_time_of_day(day.replace(hour=h), "any") for h in range(24))
+
+
+def test_each_part_of_the_day_is_a_fixed_window_and_night_wraps_past_midnight():
+    from carequeue.clinic import TIMES_OF_DAY, matches_time_of_day
+    day = datetime(2026, 10, 13)
+    hours = {tod: [h for h in range(24) if matches_time_of_day(day.replace(hour=h), tod)] for tod in TIMES_OF_DAY}
+    assert hours["evening"] == [18, 19, 20, 21]
+    assert hours["night"] == [0, 1, 2, 3, 4, 5, 22, 23]
+    # Mornings, afternoons, evenings and nights cover the clock once, with no gaps or overlaps.
+    assert sorted(sum((hours[t] for t in TIMES_OF_DAY if t != "any"), [])) == list(range(24))
+
+
+def test_a_night_waitlist_entry_gets_a_night_opening_and_a_morning_one_does_not(clinic, avail):
+    from sqlalchemy import select
+
+    from carequeue.models import Appointment
+    from carequeue.seed import ensure_slots
+    with clinic.Session() as s:  # the test grid is 9-5; add the around-the-clock grid for this week
+        ensure_slots(s, date(2026, 10, 12), 5, open_hour=0, close_hour=24)
+        s.commit()
+    avail.set_hours(1, [{"weekday": d, "shift": "night" if d == 1 else "day"} for d in range(5)])
+    # Tuesday is a night shift: bookable 10 PM to midnight. Fill it, so the 11 PM cancellation is the only opening.
+    eleven_pm = datetime(2026, 10, 13, 23, 0)
+    night = clinic.book(PATIENTS["Ava"], slot_at(clinic, 1, eleven_pm))
+    clinic.book(PATIENTS["Liam"], slot_at(clinic, 1, datetime(2026, 10, 13, 22, 0)))
+    clinic.book(PATIENTS["Sofia"], slot_at(clinic, 1, datetime(2026, 10, 13, 22, 30)))
+    avail.add_time_off(1, datetime(2026, 10, 13, 23, 30), datetime(2026, 10, 14))
+    tuesday = {"earliest": date(2026, 10, 13), "latest": date(2026, 10, 13), "provider_id": 1}
+    morning = clinic.join_waitlist(PATIENTS["Noah"], time_of_day="morning", **tuesday)
+    late = clinic.join_waitlist(PATIENTS["Mia"], time_of_day="night", **tuesday)
+    assert morning["status"] == late["status"] == "waiting"
+    clinic.cancel(night["id"])
+    clinic.run_pending(max_rounds=5)
+    with clinic.Session() as s:
+        offer = s.scalar(select(Appointment).where(Appointment.slot_id == slot_at(clinic, 1, eleven_pm),
+                                                   Appointment.status == "held"))
+    # Noah joined first, but he asked for mornings; the 11 PM opening goes to Mia, who asked for nights.
+    assert offer is not None and offer.waitlist_entry_id == late["id"] != morning["id"]

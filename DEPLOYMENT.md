@@ -39,11 +39,13 @@ The first CD run creates `ghcr.io/santhoshkumaar160302-ship-it/carequeue`. New p
 2. For the image URL, enter `ghcr.io/santhoshkumaar160302-ship-it/carequeue:latest`.
 3. Name it `carequeue` and pick the **Free** instance type.
 4. Under **Advanced**, set the **Health Check Path** to `/api/health`.
-5. Add this environment variable:
+5. Add these environment variables:
 
 | Key | Value |
 | --- | --- |
 | `NEXUSAI_URL` | `https://nexusai-latest.onrender.com` |
+| `CQ_DEMO_PASSWORD` | the password for the sample accounts (the one in the README) |
+| `CQ_CLINIC_TIMEZONE` | `America/Los_Angeles` (the clinic's time zone; Render's servers run on UTC) |
 
 That's all it needs. With no database or Redis set, it uses SQLite and an in-memory cache and queue, and creates a fresh demo clinic every time it starts.
 
@@ -60,6 +62,6 @@ From then on, every push to `main` that passes CI goes live automatically.
 
 - **The demo resets.** Data lives in the container, so a restart or deploy brings back a fresh demo clinic. That suits a demo. For real use, set `DATABASE_URL` to a managed PostgreSQL, and `REDIS_URL` and `RABBITMQ_URL` to hosted services, then run `python -m carequeue.worker` as a separate background worker with `CQ_BACKGROUND_WORKER=0` on the web service.
 - **The first visit is slow.** Free instances sleep after 15 minutes without traffic and take about a minute to wake up.
-- **The assistant might fall back to rules.** If NexusAI is also asleep, the first request may time out and use keyword rules; the next one will use the LLM.
-- **Anyone can use the demo accounts.** The sign-in page has one-click buttons for a demo patient and a demo doctor, and all the data is made up. For anything real, set `CQ_DEMO_LOGINS=0` to remove those buttons and turn on a persistent database. People can still register as patients; doctor accounts are created by the clinic.
+- **The AI might fall back.** If NexusAI is also asleep, the first request may time out: the search uses keyword rules, the note check its rules, and the summary the basic version. The next request will use the LLM.
+- **Anyone with the README can use the sample accounts.** All the data is made up, and the README publishes the password on purpose. For anything real, leave `CQ_DEMO_PASSWORD` unset (nobody can sign in to them) and turn on a persistent database. People can still create patient accounts; doctor accounts are created by the clinic's management.
 - **Signing in uses a cookie.** It's marked `Secure` automatically when the site is served over HTTPS, as it is on Render.

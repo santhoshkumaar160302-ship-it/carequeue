@@ -90,3 +90,15 @@ def test_a_doctor_the_patient_never_named_becomes_their_specialty():
     named = validate_llm_intent({"provider": "Dr. Lena Brooks", "earliest": "2026-10-13"}, TODAY, PROVIDERS)
     assert keep_unnamed_doctors_open(named, "can dr brooks see me", PROVIDERS).provider_id == 2
     assert named_in("Lena on Friday?", "Dr. Lena Brooks") and not named_in("dr. b", "Dr. Lena Brooks")
+
+
+@pytest.mark.parametrize("text, tod", [
+    ("a doctor this evening after work at 7pm", "evening"),
+    ("can I see Dr. Patel tonight", "evening"),
+    ("I work days, need a late night appointment", "night"),
+    ("anything around 11pm on Tuesday", "night"),
+    ("my kid threw up last night, can we come this morning", "morning"),  # "last night" is the symptom
+    ("coughing all night, any time this week is fine", "any"),
+])
+def test_rule_parser_reads_evenings_and_nights(text, tod):
+    assert rule_parse(text, date(2026, 10, 14), []).time_of_day == tod

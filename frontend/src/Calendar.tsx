@@ -31,7 +31,11 @@ export function WeekGrid({ week, today, now, selected, onSelect, look, trim }: P
   let first = 0;
   let last = allTimes.length - 1;
   if (trim) {
-    const off = (i: number) => week.days.every((d) => !d.slots[i] || ["unavailable", "blocked"].includes(d.slots[i].state));
+    // Outside everyone's hours on every day shown. Time off stays visible, so the doctor sees it.
+    const off = (i: number) => week.days.every((d) => {
+      const s = d.slots[i];
+      return !s || s.state === "unavailable" || (s.state === "blocked" && s.blocked_reason !== "time_off");
+    });
     while (first < last && off(first)) first++;
     while (last > first && off(last)) last--;
   }

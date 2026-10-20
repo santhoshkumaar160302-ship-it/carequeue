@@ -1,1 +1,1 @@
-{"root":["./src/app.tsx","./src/calendar.tsx","./src/doctor.tsx","./src/login.tsx","./src/patient.tsx","./src/api.ts","./src/common.tsx","./src/main.tsx","./vite.config.ts"],"version":"5.6.3"}
+{"root":["./src/aihelp.tsx","./src/app.tsx","./src/calendar.tsx","./src/chartview.tsx","./src/doctor.tsx","./src/login.tsx","./src/patient.tsx","./src/api.ts","./src/common.tsx","./src/main.tsx","./vite.config.ts"],"version":"5.6.3"}

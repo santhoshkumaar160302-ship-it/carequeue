@@ -12,7 +12,8 @@ WEDNESDAY_11 = datetime(2026, 10, 14, 11, 0)  # mid-week, with visits already th
 
 
 def make_client(now=WEDNESDAY_11, **settings):
-    settings = Settings(database_url="sqlite://", run_background_worker=False, seed_demo=True, **settings)
+    settings = Settings(database_url="sqlite://", run_background_worker=False, seed_demo=True,
+                        **{"demo_logins": True, **settings})
     services = build_services(settings, clock=FakeClock(now))
     return TestClient(create_app(services)), services
 
